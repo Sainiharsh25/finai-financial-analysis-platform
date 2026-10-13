@@ -1,0 +1,145 @@
+@import "tailwindcss";
+
+/* ===== FinAI global theme ===== */
+
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  min-height: 100vh;
+  background-color: #f1f5f9;
+  color: #0f172a;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+html.dark body {
+  background-color: #020617;
+  color: #e2e8f0;
+}
+
+/* ===== Dark mode: common surfaces ===== */
+
+html.dark .bg-white,
+html.dark [class~="bg-slate-50"],
+html.dark [class~="bg-slate-100"],
+html.dark [class~="bg-gray-50"],
+html.dark [class~="bg-gray-100"] {
+  background-color: #0f172a;
+}
+
+/* Nested panels */
+
+html.dark [class~="bg-slate-200"],
+html.dark [class~="bg-gray-200"] {
+  background-color: #1e293b;
+}
+
+/* ===== Text colors ===== */
+
+html.dark [class~="text-slate-900"],
+html.dark [class~="text-slate-800"],
+html.dark [class~="text-gray-900"],
+html.dark [class~="text-gray-800"] {
+  color: #f1f5f9;
+}
+
+html.dark [class~="text-slate-700"],
+html.dark [class~="text-slate-600"],
+html.dark [class~="text-gray-700"],
+html.dark [class~="text-gray-600"] {
+  color: #cbd5e1;
+}
+
+html.dark [class~="text-slate-500"],
+html.dark [class~="text-gray-500"] {
+  color: #94a3b8;
+}
+
+/* ===== Borders and separators ===== */
+
+html.dark [class~="border-slate-100"],
+html.dark [class~="border-slate-200"],
+html.dark [class~="border-slate-300"],
+html.dark [class~="border-gray-200"],
+html.dark [class~="border-gray-300"] {
+  border-color: #334155;
+}
+
+/* ===== Clear, readable hover states ===== */
+
+/* Cards and panels */
+html.dark .bg-white:hover,
+html.dark [class~="bg-slate-50"]:hover,
+html.dark [class~="bg-slate-100"]:hover,
+html.dark [class~="bg-gray-50"]:hover,
+html.dark [class~="bg-gray-100"]:hover {
+  background-color: #1e293b;
+}
+
+/* Buttons and clickable elements */
+html.dark button:hover,
+html.dark a:hover,
+html.dark [role="button"]:hover {
+  transition: background-color 150ms ease, color 150ms ease,
+    border-color 150ms ease;
+}
+
+/* Keep primary-colored buttons readable */
+html.dark button[class*="bg-blue-"]:hover,
+html.dark a[class*="bg-blue-"]:hover,
+html.dark button[class*="bg-indigo-"]:hover,
+html.dark a[class*="bg-indigo-"]:hover {
+  filter: brightness(1.12);
+}
+
+/* Keyboard focus visibility */
+html.dark button:focus-visible,
+html.dark a:focus-visible,
+html.dark input:focus-visible,
+html.dark select:focus-visible,
+html.dark textarea:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+/* ===== Form controls ===== */
+
+html.dark input:not([type="checkbox"]):not([type="radio"]),
+html.dark select,
+html.dark textarea {
+  background-color: #0f172a;
+  color: #f1f5f9;
+  border-color: #475569;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #94a3b8;
+}
+
+/* ===== Tables ===== */
+
+html.dark table thead {
+  background-color: #0f172a;
+}
+
+html.dark table tbody tr {
+  border-color: #334155;
+}
+
+html.dark table tbody tr:hover {
+  background-color: #1e293b;
+}
+
+/* ===== Reduced motion ===== */
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    transition: none;
+  }
+}
