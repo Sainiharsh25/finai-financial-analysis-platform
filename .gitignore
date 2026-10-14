@@ -1,0 +1,19 @@
+# Secrets and local configuration
+**/application-local.properties
+.env
+.env.*
+
+# Java / Maven build output
+**/target/
+**/${project.build.directory}/
+
+# Frontend dependencies and build output
+finai-frontend/node_modules/
+finai-frontend/dist/
+
+# Local IDE and OS files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
