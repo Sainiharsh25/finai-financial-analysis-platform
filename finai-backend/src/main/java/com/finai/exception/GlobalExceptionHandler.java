@@ -19,12 +19,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, String>> handleInvalidRequest(
             HttpMessageNotReadableException ex) {
-        log.warn("Invalid request body: {}", ex.getMessage());
+
+        log.error("Login/request JSON parsing failed", ex);
+
+        String detail = ex.getMostSpecificCause().getMessage();
 
         return ResponseEntity.badRequest().body(
-                Map.of("error", "Invalid request body or JSON format")
+                Map.of("error", detail != null ? detail : "Unknown JSON parsing error")
         );
     }
+
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, String>> handleRuntimeException(
