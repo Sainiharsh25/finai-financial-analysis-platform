@@ -1,5 +1,7 @@
 package com.finai.exception;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -11,23 +13,26 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final Logger log =
+            LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, String>> handleInvalidRequest(
             HttpMessageNotReadableException ex) {
+        log.warn("Invalid request body: {}", ex.getMessage());
 
         return ResponseEntity.badRequest().body(
-                Map.of("error", "Invalid request body. Check the JSON format.")
+                Map.of("error", "Invalid request body or JSON format")
         );
     }
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, String>> handleRuntimeException(
             RuntimeException ex) {
+        log.error("Application request failed", ex);
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
-                Map.of("error", ex.getMessage() == null
-                        ? "Request failed."
-                        : ex.getMessage())
+                Map.of("error", "Request failed. Check backend logs.")
         );
     }
 }
