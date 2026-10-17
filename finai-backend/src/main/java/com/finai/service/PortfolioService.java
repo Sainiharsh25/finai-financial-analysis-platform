@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
-
+import com.finai.service.MarketDataService;
 @Service
 @RequiredArgsConstructor
 public class PortfolioService {
@@ -28,6 +28,7 @@ public class PortfolioService {
     private final StockRepository stockRepository;
     private final UserRepository userRepository;
     private final HistoricalPriceRepository historicalPriceRepository;
+    private final MarketDataService marketDataService;
 
     @Transactional
     public PortfolioHoldingResponse addHolding(
@@ -35,11 +36,24 @@ public class PortfolioService {
             Authentication authentication) {
 
         User user = getCurrentUser(authentication);
-        String symbol = request.getSymbol().toUpperCase();
+
+        String symbol = request.getSymbol().trim().toUpperCase();
 
         Stock stock = stockRepository.findBySymbol(symbol)
-                .orElseThrow(() ->
-                        new RuntimeException("Stock not found: " + symbol));
+                .orElseGet(() -> {
+                    try {
+                        marketDataService.fetchAndSaveDailyPrices(symbol);
+
+                        return stockRepository.findBySymbol(symbol)
+                                .orElseThrow(() ->
+                                        new RuntimeException(
+                                                "Stock could not be created: " + symbol));
+                    } catch (Exception e) {
+                        throw new RuntimeException(
+                                "Unable to initialize stock " + symbol + ": "
+                                        + e.getMessage(), e);
+                    }
+                });
 
         PortfolioHolding holding =
                 portfolioHoldingRepository.findByUserAndStock(user, stock)
