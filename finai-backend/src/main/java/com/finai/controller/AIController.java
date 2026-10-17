@@ -74,7 +74,15 @@ public class AIController {
         }
 
         Stock stock = stockRepository.findBySymbol(symbol)
-                .orElseThrow(() -> new RuntimeException("Stock not found: " + symbol));
+                .orElseGet(() -> {
+                    Stock newStock = Stock.builder()
+                            .symbol(symbol)
+                            .companyName(symbol)
+                            .exchange("NSE")
+                            .build();
+
+                    return stockRepository.save(newStock);
+                });
 
         List<HistoricalPrice> prices =
                 historicalPriceRepository.findByStockOrderByTradingDateAsc(stock);
