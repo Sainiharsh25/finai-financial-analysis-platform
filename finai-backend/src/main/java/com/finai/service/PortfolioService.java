@@ -1,4 +1,3 @@
-
 package com.finai.service;
 
 import com.finai.dto.PortfolioHoldingRequest;
@@ -19,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
-import com.finai.service.MarketDataService;
+
 @Service
 @RequiredArgsConstructor
 public class PortfolioService {
@@ -28,7 +27,6 @@ public class PortfolioService {
     private final StockRepository stockRepository;
     private final UserRepository userRepository;
     private final HistoricalPriceRepository historicalPriceRepository;
-    private final MarketDataService marketDataService;
 
     @Transactional
     public PortfolioHoldingResponse addHolding(
@@ -39,21 +37,15 @@ public class PortfolioService {
 
         String symbol = request.getSymbol().trim().toUpperCase();
 
+        // Create a stock record if it does not already exist.
         Stock stock = stockRepository.findBySymbol(symbol)
-                .orElseGet(() -> {
-                    try {
-                        marketDataService.fetchAndSaveDailyPrices(symbol);
-
-                        return stockRepository.findBySymbol(symbol)
-                                .orElseThrow(() ->
-                                        new RuntimeException(
-                                                "Stock could not be created: " + symbol));
-                    } catch (Exception e) {
-                        throw new RuntimeException(
-                                "Unable to initialize stock " + symbol + ": "
-                                        + e.getMessage(), e);
-                    }
-                });
+                .orElseGet(() -> stockRepository.save(
+                        Stock.builder()
+                                .symbol(symbol)
+                                .companyName(symbol)
+                                .exchange("NSE")
+                                .build()
+                ));
 
         PortfolioHolding holding =
                 portfolioHoldingRepository.findByUserAndStock(user, stock)
@@ -89,8 +81,10 @@ public class PortfolioService {
             holding.setAverageBuyPrice(newAveragePrice);
         }
 
-        portfolioHoldingRepository.save(holding);
-        return buildResponse(holding);
+        PortfolioHolding savedHolding =
+                portfolioHoldingRepository.save(holding);
+
+        return buildResponse(savedHolding);
     }
 
     @Transactional(readOnly = true)
@@ -112,22 +106,26 @@ public class PortfolioService {
 
         User user = getCurrentUser(authentication);
 
-        Stock stock = stockRepository.findBySymbol(symbol.toUpperCase())
+        String normalizedSymbol = symbol.trim().toUpperCase();
+
+        Stock stock = stockRepository.findBySymbol(normalizedSymbol)
                 .orElseThrow(() ->
-                        new RuntimeException("Stock not found: " + symbol));
+                        new RuntimeException(
+                                "Stock not found: " + normalizedSymbol));
 
         PortfolioHolding holding =
                 portfolioHoldingRepository.findByUserAndStock(user, stock)
                         .orElseThrow(() ->
                                 new RuntimeException(
-                                        "Holding not found: " + symbol));
+                                        "Holding not found: " + normalizedSymbol));
 
         portfolioHoldingRepository.delete(holding);
     }
 
     private User getCurrentUser(Authentication authentication) {
         return userRepository.findByEmail(authentication.getName())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() ->
+                        new RuntimeException("User not found"));
     }
 
     private PortfolioHoldingResponse buildResponse(
