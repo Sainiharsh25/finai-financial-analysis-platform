@@ -13,13 +13,14 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
-
+import com.finai.service.MarketDataService;
 @Service
 @RequiredArgsConstructor
 public class TechnicalIndicatorService {
 
     private final HistoricalPriceRepository historicalPriceRepository;
     private final StockRepository stockRepository;
+    private final MarketDataService marketDataService;
 
     public List<BigDecimal> calculateSMA(
             String symbol,
@@ -373,4 +374,28 @@ public class TechnicalIndicatorService {
                 lowerBand.setScale(2, RoundingMode.HALF_UP)
         );
     }
+
+    private Stock getStockWithHistoricalData(String symbol) {
+        if (symbol == null || symbol.isBlank()) {
+            throw new IllegalArgumentException("Stock symbol is required");
+        }
+
+        String normalizedSymbol = symbol.trim().toUpperCase();
+
+        try {
+            marketDataService.fetchAndSaveDailyPrices(normalizedSymbol);
+        } catch (Exception e) {
+            throw new RuntimeException(
+                    "Unable to load market data for " + normalizedSymbol
+                            + ": " + e.getMessage(),
+                    e
+            );
+        }
+
+        return stockRepository.findBySymbol(normalizedSymbol)
+                .orElseThrow(() ->
+                        new RuntimeException("Stock not found: " + normalizedSymbol)
+                );
+    }
+
 }

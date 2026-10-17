@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.util.List;
 
-
 @RestController
 @RequestMapping("/api/indicators")
 @RequiredArgsConstructor
@@ -22,12 +21,8 @@ public class TechnicalIndicatorController {
     public ResponseEntity<List<BigDecimal>> getSMA(
             @PathVariable String symbol,
             @RequestParam(defaultValue = "5") int period) {
-
         return ResponseEntity.ok(
-                indicatorService.calculateSMA(
-                        symbol,
-                        period
-                )
+                indicatorService.calculateSMA(symbol, period)
         );
     }
 
@@ -35,30 +30,23 @@ public class TechnicalIndicatorController {
     public ResponseEntity<BigDecimal> getRSI(
             @PathVariable String symbol,
             @RequestParam(defaultValue = "14") int period) {
-
         return ResponseEntity.ok(
-                indicatorService.calculateRSI(
-                        symbol,
-                        period
-                )
+                indicatorService.calculateRSI(symbol, period)
         );
     }
 
     @GetMapping("/{symbol}/ema")
     public ResponseEntity<BigDecimal> calculateEMA(
             @PathVariable String symbol,
-            @RequestParam int period) {
-
+            @RequestParam(defaultValue = "20") int period) {
         return ResponseEntity.ok(
-                indicatorService
-                        .calculateEMA(symbol, period)
+                indicatorService.calculateEMA(symbol, period)
         );
     }
 
     @GetMapping("/{symbol}/macd")
     public ResponseEntity<MACDResponse> calculateMACD(
             @PathVariable String symbol) {
-
         return ResponseEntity.ok(
                 indicatorService.calculateMACD(symbol)
         );
@@ -67,11 +55,9 @@ public class TechnicalIndicatorController {
     @GetMapping("/{symbol}/bollinger")
     public ResponseEntity<BollingerBandsResponse> calculateBollingerBands(
             @PathVariable String symbol,
-            @RequestParam int period) {
-
+            @RequestParam(defaultValue = "20") int period) {
         return ResponseEntity.ok(
-                indicatorService
-                        .calculateBollingerBands(symbol, period)
+                indicatorService.calculateBollingerBands(symbol, period)
         );
     }
 }

@@ -6,7 +6,7 @@ import com.finai.entity.HistoricalPrice;
 import com.finai.entity.Stock;
 import com.finai.repository.HistoricalPriceRepository;
 import com.finai.repository.StockRepository;
-
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class MarketDataService {
 
     @Value("${alphavantage.api.key}")
@@ -29,18 +30,9 @@ public class MarketDataService {
 
     private final StockRepository stockRepository;
     private final HistoricalPriceRepository historicalPriceRepository;
-    private final RestTemplate restTemplate;
-    private final ObjectMapper objectMapper;
 
-    public MarketDataService(
-            StockRepository stockRepository,
-            HistoricalPriceRepository historicalPriceRepository) {
-
-        this.stockRepository = stockRepository;
-        this.historicalPriceRepository = historicalPriceRepository;
-        this.restTemplate = new RestTemplate();
-        this.objectMapper = new ObjectMapper();
-    }
+    private final RestTemplate restTemplate = new RestTemplate();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Transactional
     public List<HistoricalPrice> fetchAndSaveDailyPrices(String symbol)
@@ -52,22 +44,16 @@ public class MarketDataService {
 
         String normalizedSymbol = symbol.trim().toUpperCase();
 
-        // Create the stock record if it does not exist.
         Stock stock = stockRepository.findBySymbol(normalizedSymbol)
-                .orElseGet(() -> {
-                    Stock newStock = Stock.builder()
-                            .symbol(normalizedSymbol)
-                            .companyName(normalizedSymbol)
-                            .exchange("BSE")
-                            .build();
+                .orElseGet(() -> stockRepository.save(
+                        Stock.builder()
+                                .symbol(normalizedSymbol)
+                                .companyName(normalizedSymbol)
+                                .exchange("BSE")
+                                .build()
+                ));
 
-                    return stockRepository.save(newStock);
-                });
-
-        // Do not assume an exchange suffix is valid for Alpha Vantage.
-        // Pass the supplied ticker as-is and validate the API response.
-        String url = UriComponentsBuilder
-                .fromUriString(baseUrl)
+        String url = UriComponentsBuilder.fromUriString(baseUrl)
                 .queryParam("function", "TIME_SERIES_DAILY")
                 .queryParam("symbol", normalizedSymbol)
                 .queryParam("outputsize", "compact")
@@ -87,7 +73,8 @@ public class MarketDataService {
         if (root.has("Error Message")) {
             throw new RuntimeException(
                     "Alpha Vantage error: "
-                            + root.get("Error Message").asText());
+                            + root.get("Error Message").asText()
+            );
         }
 
         if (root.has("Note") || root.has("Information")) {
@@ -96,25 +83,24 @@ public class MarketDataService {
                     : root.get("Information").asText();
 
             throw new RuntimeException(
-                    "Alpha Vantage API notice or limit: " + message);
+                    "Alpha Vantage API limit or notice: " + message
+            );
         }
 
         JsonNode timeSeries = root.get("Time Series (Daily)");
 
         if (timeSeries == null || !timeSeries.fields().hasNext()) {
             throw new RuntimeException(
-                    "No daily market data returned for "
-                            + normalizedSymbol
-                            + ". Verify the ticker is supported by your API plan.");
+                    "No daily market data returned for " + normalizedSymbol
+                            + ". Verify the symbol and API support."
+            );
         }
 
-        List<HistoricalPrice> prices = new ArrayList<>();
-
+        List<HistoricalPrice> newPrices = new ArrayList<>();
         var fields = timeSeries.fields();
 
         while (fields.hasNext()) {
             var entry = fields.next();
-
             LocalDate date = LocalDate.parse(entry.getKey());
 
             if (historicalPriceRepository
@@ -122,31 +108,26 @@ public class MarketDataService {
                 continue;
             }
 
-            JsonNode dailyData = entry.getValue();
+            JsonNode daily = entry.getValue();
 
             HistoricalPrice price = HistoricalPrice.builder()
                     .stock(stock)
                     .tradingDate(date)
-                    .openPrice(new BigDecimal(
-                            dailyData.get("1. open").asText()))
-                    .highPrice(new BigDecimal(
-                            dailyData.get("2. high").asText()))
-                    .lowPrice(new BigDecimal(
-                            dailyData.get("3. low").asText()))
-                    .closePrice(new BigDecimal(
-                            dailyData.get("4. close").asText()))
-                    .volume(dailyData.get("5. volume").asLong())
+                    .openPrice(new BigDecimal(daily.get("1. open").asText()))
+                    .highPrice(new BigDecimal(daily.get("2. high").asText()))
+                    .lowPrice(new BigDecimal(daily.get("3. low").asText()))
+                    .closePrice(new BigDecimal(daily.get("4. close").asText()))
+                    .volume(daily.get("5. volume").asLong())
                     .build();
 
-            prices.add(price);
+            newPrices.add(price);
         }
 
-        if (prices.isEmpty()) {
-            // Existing records may already cover the requested data.
-            return historicalPriceRepository
-                    .findByStockOrderByTradingDateAsc(stock);
+        if (!newPrices.isEmpty()) {
+            historicalPriceRepository.saveAll(newPrices);
         }
 
-        return historicalPriceRepository.saveAll(prices);
+        return historicalPriceRepository
+                .findByStockOrderByTradingDateAsc(stock);
     }
 }
