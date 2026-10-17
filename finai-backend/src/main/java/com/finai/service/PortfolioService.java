@@ -37,7 +37,6 @@ public class PortfolioService {
 
         String symbol = request.getSymbol().trim().toUpperCase();
 
-        // Create a stock record if it does not already exist.
         Stock stock = stockRepository.findBySymbol(symbol)
                 .orElseGet(() -> stockRepository.save(
                         Stock.builder()
@@ -123,6 +122,10 @@ public class PortfolioService {
     }
 
     private User getCurrentUser(Authentication authentication) {
+        if (authentication == null || authentication.getName() == null) {
+            throw new RuntimeException("User is not authenticated");
+        }
+
         return userRepository.findByEmail(authentication.getName())
                 .orElseThrow(() ->
                         new RuntimeException("User not found"));
@@ -136,23 +139,32 @@ public class PortfolioService {
         BigDecimal currentPrice = historicalPriceRepository
                 .findTopByStockOrderByTradingDateDesc(stock)
                 .map(price -> price.getClosePrice())
-                .orElse(BigDecimal.ZERO);
+                .orElse(null);
 
         BigDecimal investedValue = holding.getAverageBuyPrice()
                 .multiply(BigDecimal.valueOf(holding.getQuantity()));
 
-        BigDecimal currentValue = currentPrice
-                .multiply(BigDecimal.valueOf(holding.getQuantity()));
+        // Missing market data is unavailable, not a zero price.
+        BigDecimal currentValue = currentPrice == null
+                ? null
+                : currentPrice.multiply(
+                BigDecimal.valueOf(holding.getQuantity()));
 
-        BigDecimal profitLoss = currentValue.subtract(investedValue);
+        BigDecimal profitLoss = currentValue == null
+                ? null
+                : currentValue.subtract(investedValue);
 
-        BigDecimal returnPercent = BigDecimal.ZERO;
+        BigDecimal returnPercent = null;
 
-        if (investedValue.compareTo(BigDecimal.ZERO) > 0) {
-            returnPercent = profitLoss
-                    .divide(investedValue, 4, RoundingMode.HALF_UP)
-                    .multiply(BigDecimal.valueOf(100))
-                    .setScale(2, RoundingMode.HALF_UP);
+        if (profitLoss != null) {
+            if (investedValue.compareTo(BigDecimal.ZERO) > 0) {
+                returnPercent = profitLoss
+                        .divide(investedValue, 4, RoundingMode.HALF_UP)
+                        .multiply(BigDecimal.valueOf(100))
+                        .setScale(2, RoundingMode.HALF_UP);
+            } else {
+                returnPercent = BigDecimal.ZERO;
+            }
         }
 
         return new PortfolioHoldingResponse(
@@ -180,23 +192,34 @@ public class PortfolioService {
                         .map(this::buildResponse)
                         .toList();
 
-        BigDecimal totalValue = holdings.stream()
+        boolean pricesAvailable = holdings.stream()
+                .allMatch(h -> h.getCurrentValue() != null);
+
+        BigDecimal totalValue = pricesAvailable
+                ? holdings.stream()
                 .map(PortfolioHoldingResponse::getCurrentValue)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                : null;
 
         BigDecimal investedValue = holdings.stream()
                 .map(PortfolioHoldingResponse::getInvestedValue)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal totalProfitLoss = totalValue.subtract(investedValue);
+        BigDecimal totalProfitLoss = totalValue == null
+                ? null
+                : totalValue.subtract(investedValue);
 
-        BigDecimal totalReturn = BigDecimal.ZERO;
+        BigDecimal totalReturn = null;
 
-        if (investedValue.compareTo(BigDecimal.ZERO) > 0) {
-            totalReturn = totalProfitLoss
-                    .divide(investedValue, 4, RoundingMode.HALF_UP)
-                    .multiply(BigDecimal.valueOf(100))
-                    .setScale(2, RoundingMode.HALF_UP);
+        if (totalProfitLoss != null) {
+            if (investedValue.compareTo(BigDecimal.ZERO) > 0) {
+                totalReturn = totalProfitLoss
+                        .divide(investedValue, 4, RoundingMode.HALF_UP)
+                        .multiply(BigDecimal.valueOf(100))
+                        .setScale(2, RoundingMode.HALF_UP);
+            } else {
+                totalReturn = BigDecimal.ZERO;
+            }
         }
 
         return new PortfolioSummaryResponse(
