@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -38,11 +39,19 @@ public class MarketDataService {
     public List<HistoricalPrice> fetchAndSaveDailyPrices(String symbol)
             throws Exception {
 
-        if (symbol == null || symbol.isBlank()) {
-            throw new IllegalArgumentException("Stock symbol is required");
+        String normalizedSymbol = normalizeSymbol(symbol);
+
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException(
+                    "Alpha Vantage API key is not configured"
+            );
         }
 
-        String normalizedSymbol = symbol.trim().toUpperCase();
+        if (baseUrl == null || baseUrl.isBlank()) {
+            throw new IllegalStateException(
+                    "Alpha Vantage base URL is not configured"
+            );
+        }
 
         Stock stock = stockRepository.findBySymbol(normalizedSymbol)
                 .orElseGet(() -> stockRepository.save(
@@ -65,14 +74,17 @@ public class MarketDataService {
         String response = restTemplate.getForObject(url, String.class);
 
         if (response == null || response.isBlank()) {
-            throw new RuntimeException("Alpha Vantage returned an empty response");
+            throw new IllegalStateException(
+                    "Alpha Vantage returned an empty response"
+            );
         }
 
         JsonNode root = objectMapper.readTree(response);
 
         if (root.has("Error Message")) {
-            throw new RuntimeException(
-                    "Alpha Vantage error: "
+            throw new IllegalStateException(
+                    "Alpha Vantage rejected symbol "
+                            + normalizedSymbol + ": "
                             + root.get("Error Message").asText()
             );
         }
@@ -82,17 +94,17 @@ public class MarketDataService {
                     ? root.get("Note").asText()
                     : root.get("Information").asText();
 
-            throw new RuntimeException(
-                    "Alpha Vantage API limit or notice: " + message
+            throw new IllegalStateException(
+                    "Alpha Vantage limit or notice: " + message
             );
         }
 
         JsonNode timeSeries = root.get("Time Series (Daily)");
 
         if (timeSeries == null || !timeSeries.fields().hasNext()) {
-            throw new RuntimeException(
+            throw new IllegalStateException(
                     "No daily market data returned for " + normalizedSymbol
-                            + ". Verify the symbol and API support."
+                            + ". Check provider symbol support and response."
             );
         }
 
@@ -101,10 +113,11 @@ public class MarketDataService {
 
         while (fields.hasNext()) {
             var entry = fields.next();
-            LocalDate date = LocalDate.parse(entry.getKey());
+
+            LocalDate tradingDate = LocalDate.parse(entry.getKey());
 
             if (historicalPriceRepository
-                    .existsByStockAndTradingDate(stock, date)) {
+                    .existsByStockAndTradingDate(stock, tradingDate)) {
                 continue;
             }
 
@@ -112,12 +125,12 @@ public class MarketDataService {
 
             HistoricalPrice price = HistoricalPrice.builder()
                     .stock(stock)
-                    .tradingDate(date)
-                    .openPrice(new BigDecimal(daily.get("1. open").asText()))
-                    .highPrice(new BigDecimal(daily.get("2. high").asText()))
-                    .lowPrice(new BigDecimal(daily.get("3. low").asText()))
-                    .closePrice(new BigDecimal(daily.get("4. close").asText()))
-                    .volume(daily.get("5. volume").asLong())
+                    .tradingDate(tradingDate)
+                    .openPrice(readDecimal(daily, "1. open"))
+                    .highPrice(readDecimal(daily, "2. high"))
+                    .lowPrice(readDecimal(daily, "3. low"))
+                    .closePrice(readDecimal(daily, "4. close"))
+                    .volume(readVolume(daily, "5. volume"))
                     .build();
 
             newPrices.add(price);
@@ -125,9 +138,51 @@ public class MarketDataService {
 
         if (!newPrices.isEmpty()) {
             historicalPriceRepository.saveAll(newPrices);
+            historicalPriceRepository.flush();
         }
 
         return historicalPriceRepository
                 .findByStockOrderByTradingDateAsc(stock);
+    }
+
+    private String normalizeSymbol(String symbol) {
+        if (symbol == null || symbol.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Stock symbol is required"
+            );
+        }
+
+        return symbol.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private BigDecimal readDecimal(JsonNode node, String fieldName) {
+        JsonNode value = node.get(fieldName);
+
+        if (value == null || value.isNull() || value.asText().isBlank()) {
+            throw new IllegalStateException(
+                    "Missing market-data field: " + fieldName
+            );
+        }
+
+        try {
+            return new BigDecimal(value.asText());
+        } catch (NumberFormatException exception) {
+            throw new IllegalStateException(
+                    "Invalid market-data value for " + fieldName,
+                    exception
+            );
+        }
+    }
+
+    private Long readVolume(JsonNode node, String fieldName) {
+        JsonNode value = node.get(fieldName);
+
+        if (value == null || value.isNull() || !value.canConvertToLong()) {
+            throw new IllegalStateException(
+                    "Missing or invalid market-data field: " + fieldName
+            );
+        }
+
+        return value.asLong();
     }
 }
