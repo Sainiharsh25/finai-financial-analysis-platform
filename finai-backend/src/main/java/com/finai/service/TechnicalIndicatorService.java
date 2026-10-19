@@ -212,30 +212,37 @@ public class TechnicalIndicatorService {
         );
     }
 
+
     private Stock getStockWithHistoricalData(String symbol) {
         String normalizedSymbol = normalizeSymbol(symbol);
 
         Stock stock = stockRepository.findBySymbol(normalizedSymbol)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Stock not found: " + normalizedSymbol
-                ));
+                .orElse(null);
 
-        List<HistoricalPrice> prices = getPrices(stock);
+        // Fetch market data if the stock is missing or has no price history.
+        if (stock == null ||
+                historicalPriceRepository
+                        .findByStockOrderByTradingDateAsc(stock)
+                        .isEmpty()) {
 
-        if (prices.isEmpty()) {
             try {
                 marketDataService.fetchAndSaveDailyPrices(normalizedSymbol);
             } catch (Exception exception) {
                 throw new IllegalStateException(
-                        "Unable to load market data for "
-                                + normalizedSymbol + ": "
-                                + exception.getMessage(),
+                        "Unable to load market data for " + normalizedSymbol
+                                + ". Details: " + exception.getMessage(),
                         exception
                 );
             }
 
-            prices = getPrices(stock);
+            // MarketDataService may have created the stock record.
+            stock = stockRepository.findBySymbol(normalizedSymbol)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Stock record was not created for " + normalizedSymbol
+                    ));
         }
+
+        List<HistoricalPrice> prices = getPrices(stock);
 
         if (prices.isEmpty()) {
             throw new IllegalStateException(
@@ -246,6 +253,7 @@ public class TechnicalIndicatorService {
 
         return stock;
     }
+
 
     private List<HistoricalPrice> getPrices(Stock stock) {
         return historicalPriceRepository
