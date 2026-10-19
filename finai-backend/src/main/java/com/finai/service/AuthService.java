@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -20,9 +21,11 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
+    @Transactional
     public void register(RegisterRequest request) {
+        String email = normalizeEmail(request.getEmail());
 
-        if (userRepository.existsByEmail(request.getEmail())) {
+        if (userRepository.existsByEmail(email)) {
             throw new RuntimeException("Email already registered");
         }
 
@@ -31,8 +34,8 @@ public class AuthService {
         }
 
         User user = User.builder()
-                .username(request.getUsername())
-                .email(request.getEmail())
+                .username(request.getUsername().trim())
+                .email(email)
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role("USER")
                 .build();
@@ -40,21 +43,30 @@ public class AuthService {
         userRepository.save(user);
     }
 
+    @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest request) {
+        String email = normalizeEmail(request.getEmail());
 
-        User user = userRepository.findByEmail(request.getEmail())
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() ->
                         new RuntimeException("Invalid email or password"));
 
         if (!passwordEncoder.matches(
                 request.getPassword(),
                 user.getPassword())) {
-
             throw new RuntimeException("Invalid email or password");
         }
 
         String token = jwtService.generateToken(user.getEmail());
 
         return new AuthResponse(token);
+    }
+
+    private String normalizeEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("Email is required");
+        }
+
+        return email.trim().toLowerCase(java.util.Locale.ROOT);
     }
 }
