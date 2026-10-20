@@ -217,43 +217,24 @@ public class TechnicalIndicatorService {
         String normalizedSymbol = normalizeSymbol(symbol);
 
         Stock stock = stockRepository.findBySymbol(normalizedSymbol)
-                .orElse(null);
-
-        // Fetch market data if the stock is missing or has no price history.
-        if (stock == null ||
-                historicalPriceRepository
-                        .findByStockOrderByTradingDateAsc(stock)
-                        .isEmpty()) {
-
-            try {
-                marketDataService.fetchAndSaveDailyPrices(normalizedSymbol);
-            } catch (Exception exception) {
-                throw new IllegalStateException(
-                        "Unable to load market data for " + normalizedSymbol
-                                + ". Details: " + exception.getMessage(),
-                        exception
-                );
-            }
-
-            // MarketDataService may have created the stock record.
-            stock = stockRepository.findBySymbol(normalizedSymbol)
-                    .orElseThrow(() -> new IllegalStateException(
-                            "Stock record was not created for " + normalizedSymbol
-                    ));
-        }
+                .orElseThrow(() ->
+                        new IllegalArgumentException(
+                                "Stock not found: " + normalizedSymbol
+                        ));
 
         List<HistoricalPrice> prices = getPrices(stock);
 
         if (prices.isEmpty()) {
             throw new IllegalStateException(
-                    "No historical closing prices are available for "
-                            + normalizedSymbol
+                    "No historical prices are stored for " + normalizedSymbol
+                            + ". Market data is unavailable because the provider "
+                            + "rate limit has been reached. Try again after the "
+                            + "provider limit resets or configure another data source."
             );
         }
 
         return stock;
     }
-
 
     private List<HistoricalPrice> getPrices(Stock stock) {
         return historicalPriceRepository
