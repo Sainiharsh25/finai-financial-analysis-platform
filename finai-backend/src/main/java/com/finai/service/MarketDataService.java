@@ -29,11 +29,16 @@ public class MarketDataService {
     @Value("${alphavantage.base.url}")
     private String baseUrl;
 
+    @Value("${alphavantage.symbol.RELIANCE:}")
+    private String relianceProviderSymbol;
+
     private final StockRepository stockRepository;
     private final HistoricalPriceRepository historicalPriceRepository;
 
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    private static long lastRequestTimeMillis = 0L;
 
     @Transactional
     public List<HistoricalPrice> fetchAndSaveDailyPrices(String symbol)
@@ -54,24 +59,31 @@ public class MarketDataService {
         }
 
         Stock stock = stockRepository.findBySymbol(normalizedSymbol)
-                .orElseGet(() -> stockRepository.save(
-                        Stock.builder()
-                                .symbol(normalizedSymbol)
-                                .companyName(normalizedSymbol)
-                                .exchange("BSE")
-                                .build()
-                ));
+                .orElse(null);
+
+        // Return cached historical prices when available.
+        if (stock != null) {
+            List<HistoricalPrice> cached =
+                    historicalPriceRepository
+                            .findByStockOrderByTradingDateAsc(stock);
+
+            if (!cached.isEmpty()) {
+                return cached;
+            }
+        }
+
+        String providerSymbol = resolveProviderSymbol(normalizedSymbol);
 
         String url = UriComponentsBuilder.fromUriString(baseUrl)
                 .queryParam("function", "TIME_SERIES_DAILY")
-                .queryParam("symbol", normalizedSymbol)
+                .queryParam("symbol", providerSymbol)
                 .queryParam("outputsize", "compact")
                 .queryParam("apikey", apiKey)
                 .build()
                 .encode()
                 .toUriString();
 
-        String response = restTemplate.getForObject(url, String.class);
+        String response = getRateLimitedResponse(url);
 
         if (response == null || response.isBlank()) {
             throw new IllegalStateException(
@@ -83,8 +95,8 @@ public class MarketDataService {
 
         if (root.has("Error Message")) {
             throw new IllegalStateException(
-                    "Alpha Vantage rejected symbol "
-                            + normalizedSymbol + ": "
+                    "Alpha Vantage rejected provider symbol "
+                            + providerSymbol + ": "
                             + root.get("Error Message").asText()
             );
         }
@@ -95,7 +107,7 @@ public class MarketDataService {
                     : root.get("Information").asText();
 
             throw new IllegalStateException(
-                    "Alpha Vantage limit or notice: " + message
+                    "Alpha Vantage rate limit or notice: " + message
             );
         }
 
@@ -103,8 +115,20 @@ public class MarketDataService {
 
         if (timeSeries == null || !timeSeries.fields().hasNext()) {
             throw new IllegalStateException(
-                    "No daily market data returned for " + normalizedSymbol
-                            + ". Check provider symbol support and response."
+                    "No daily market data returned for provider symbol "
+                            + providerSymbol
+                            + ". Verify symbol support and API-plan access."
+            );
+        }
+
+        // Create the database record only after receiving valid data.
+        if (stock == null) {
+            stock = stockRepository.save(
+                    Stock.builder()
+                            .symbol(normalizedSymbol)
+                            .companyName(normalizedSymbol)
+                            .exchange("BSE")
+                            .build()
             );
         }
 
@@ -113,7 +137,6 @@ public class MarketDataService {
 
         while (fields.hasNext()) {
             var entry = fields.next();
-
             LocalDate tradingDate = LocalDate.parse(entry.getKey());
 
             if (historicalPriceRepository
@@ -143,6 +166,31 @@ public class MarketDataService {
 
         return historicalPriceRepository
                 .findByStockOrderByTradingDateAsc(stock);
+    }
+
+    private String resolveProviderSymbol(String symbol) {
+        if ("RELIANCE".equals(symbol)
+                && relianceProviderSymbol != null
+                && !relianceProviderSymbol.isBlank()) {
+            return relianceProviderSymbol.trim().toUpperCase(Locale.ROOT);
+        }
+
+        return symbol;
+    }
+
+    private synchronized String getRateLimitedResponse(String url)
+            throws InterruptedException {
+
+        long now = System.currentTimeMillis();
+        long waitMillis = 1000L - (now - lastRequestTimeMillis);
+
+        if (waitMillis > 0) {
+            Thread.sleep(waitMillis);
+        }
+
+        lastRequestTimeMillis = System.currentTimeMillis();
+
+        return restTemplate.getForObject(url, String.class);
     }
 
     private String normalizeSymbol(String symbol) {
@@ -177,7 +225,8 @@ public class MarketDataService {
     private Long readVolume(JsonNode node, String fieldName) {
         JsonNode value = node.get(fieldName);
 
-        if (value == null || value.isNull() || !value.canConvertToLong()) {
+        if (value == null || value.isNull()
+                || !value.canConvertToLong()) {
             throw new IllegalStateException(
                     "Missing or invalid market-data field: " + fieldName
             );
