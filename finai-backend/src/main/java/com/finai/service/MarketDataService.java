@@ -14,7 +14,9 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -23,10 +25,10 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public class MarketDataService {
 
-    @Value("${alphavantage.api.key}")
+    @Value("${alphavantage.api.key:}")
     private String apiKey;
 
-    @Value("${alphavantage.base.url}")
+    @Value("${alphavantage.base.url:https://www.alphavantage.co/query}")
     private String baseUrl;
 
     @Value("${alphavantage.symbol.RELIANCE:}")
@@ -46,22 +48,10 @@ public class MarketDataService {
 
         String normalizedSymbol = normalizeSymbol(symbol);
 
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException(
-                    "Alpha Vantage API key is not configured"
-            );
-        }
-
-        if (baseUrl == null || baseUrl.isBlank()) {
-            throw new IllegalStateException(
-                    "Alpha Vantage base URL is not configured"
-            );
-        }
-
         Stock stock = stockRepository.findBySymbol(normalizedSymbol)
                 .orElse(null);
 
-        // Return cached historical prices when available.
+        // Reuse stored history. Do not consume API quota for every indicator.
         if (stock != null) {
             List<HistoricalPrice> cached =
                     historicalPriceRepository
@@ -72,7 +62,90 @@ public class MarketDataService {
             }
         }
 
-        String providerSymbol = resolveProviderSymbol(normalizedSymbol);
+        List<MarketBar> bars;
+        Exception alphaVantageFailure = null;
+
+        // Try Alpha Vantage first, if configured.
+        if (apiKey != null && !apiKey.isBlank()) {
+            try {
+                bars = fetchAlphaVantage(normalizedSymbol);
+            } catch (Exception exception) {
+                alphaVantageFailure = exception;
+                bars = List.of();
+            }
+        } else {
+            alphaVantageFailure =
+                    new IllegalStateException("Alpha Vantage API key is not configured");
+            bars = List.of();
+        }
+
+        // Use real Yahoo Finance history when Alpha Vantage fails.
+        if (bars.isEmpty()) {
+            try {
+                bars = fetchYahooFinance(normalizedSymbol);
+            } catch (Exception yahooFailure) {
+                String message =
+                        "Unable to load historical prices for " + normalizedSymbol
+                                + " from Alpha Vantage or Yahoo Finance. "
+                                + "Check provider symbol support, API limits, and network access.";
+
+                if (alphaVantageFailure != null) {
+                    yahooFailure.addSuppressed(alphaVantageFailure);
+                }
+
+                throw new IllegalStateException(message, yahooFailure);
+            }
+        }
+
+        if (bars.isEmpty()) {
+            throw new IllegalStateException(
+                    "No historical prices returned for " + normalizedSymbol);
+        }
+
+        if (stock == null) {
+            stock = stockRepository.save(
+                    Stock.builder()
+                            .symbol(normalizedSymbol)
+                            .companyName(normalizedSymbol)
+                            .exchange("NSE")
+                            .build()
+            );
+        }
+
+        List<HistoricalPrice> newPrices = new ArrayList<>();
+
+        for (MarketBar bar : bars) {
+            if (historicalPriceRepository
+                    .existsByStockAndTradingDate(stock, bar.date())) {
+                continue;
+            }
+
+            newPrices.add(
+                    HistoricalPrice.builder()
+                            .stock(stock)
+                            .tradingDate(bar.date())
+                            .openPrice(bar.open())
+                            .highPrice(bar.high())
+                            .lowPrice(bar.low())
+                            .closePrice(bar.close())
+                            .volume(bar.volume())
+                            .build()
+            );
+        }
+
+        if (!newPrices.isEmpty()) {
+            historicalPriceRepository.saveAll(newPrices);
+            historicalPriceRepository.flush();
+        }
+
+        return historicalPriceRepository
+                .findByStockOrderByTradingDateAsc(stock);
+    }
+
+    private List<MarketBar> fetchAlphaVantage(String symbol)
+            throws Exception {
+
+        String providerSymbol = resolveProviderSymbol(symbol);
 
         String url = UriComponentsBuilder.fromUriString(baseUrl)
                 .queryParam("function", "TIME_SERIES_DAILY")
@@ -86,86 +159,134 @@ public class MarketDataService {
         String response = getRateLimitedResponse(url);
 
         if (response == null || response.isBlank()) {
-            throw new IllegalStateException(
-                    "Alpha Vantage returned an empty response"
-            );
+            throw new IllegalStateException("Alpha Vantage returned an empty response");
         }
 
         JsonNode root = objectMapper.readTree(response);
 
-        if (root.has("Error Message")) {
+        if (root.has("Error Message")
+                || root.has("Note")
+                || root.has("Information")) {
             throw new IllegalStateException(
-                    "Alpha Vantage rejected provider symbol "
-                            + providerSymbol + ": "
-                            + root.get("Error Message").asText()
-            );
+                    "Alpha Vantage response: " + root.toString());
         }
 
-        if (root.has("Note") || root.has("Information")) {
-            String message = root.has("Note")
-                    ? root.get("Note").asText()
-                    : root.get("Information").asText();
+        JsonNode series = root.get("Time Series (Daily)");
 
+        if (series == null || !series.fields().hasNext()) {
             throw new IllegalStateException(
-                    "Alpha Vantage rate limit or notice: " + message
-            );
+                    "Alpha Vantage returned no daily series for " + providerSymbol);
         }
 
-        JsonNode timeSeries = root.get("Time Series (Daily)");
-
-        if (timeSeries == null || !timeSeries.fields().hasNext()) {
-            throw new IllegalStateException(
-                    "No daily market data returned for provider symbol "
-                            + providerSymbol
-                            + ". Verify symbol support and API-plan access."
-            );
-        }
-
-        // Create the database record only after receiving valid data.
-        if (stock == null) {
-            stock = stockRepository.save(
-                    Stock.builder()
-                            .symbol(normalizedSymbol)
-                            .companyName(normalizedSymbol)
-                            .exchange("BSE")
-                            .build()
-            );
-        }
-
-        List<HistoricalPrice> newPrices = new ArrayList<>();
-        var fields = timeSeries.fields();
+        List<MarketBar> bars = new ArrayList<>();
+        var fields = series.fields();
 
         while (fields.hasNext()) {
             var entry = fields.next();
-            LocalDate tradingDate = LocalDate.parse(entry.getKey());
+            JsonNode daily = entry.getValue();
 
-            if (historicalPriceRepository
-                    .existsByStockAndTradingDate(stock, tradingDate)) {
+            bars.add(new MarketBar(
+                    LocalDate.parse(entry.getKey()),
+                    readDecimal(daily, "1. open"),
+                    readDecimal(daily, "2. high"),
+                    readDecimal(daily, "3. low"),
+                    readDecimal(daily, "4. close"),
+                    readVolume(daily, "5. volume")
+            ));
+        }
+
+        return bars;
+    }
+
+    private List<MarketBar> fetchYahooFinance(String symbol)
+            throws Exception {
+
+        String providerSymbol = resolveYahooSymbol(symbol);
+
+        String url = UriComponentsBuilder
+                .fromUriString("https://query1.finance.yahoo.com/v8/finance/chart/"
+                        + providerSymbol)
+                .queryParam("range", "6mo")
+                .queryParam("interval", "1d")
+                .build()
+                .encode()
+                .toUriString();
+
+        String response = restTemplate.getForObject(url, String.class);
+
+        if (response == null || response.isBlank()) {
+            throw new IllegalStateException("Yahoo Finance returned an empty response");
+        }
+
+        JsonNode root = objectMapper.readTree(response);
+        JsonNode result = root.path("chart").path("result").path(0);
+
+        if (result.isMissingNode() || result.isNull()) {
+            throw new IllegalStateException(
+                    "Yahoo Finance returned no chart data for " + providerSymbol
+                            + ": " + root.path("chart").path("error"));
+        }
+
+        JsonNode timestamps = result.path("timestamp");
+        JsonNode quote = result.path("indicators")
+                .path("quote").path(0);
+
+        JsonNode opens = quote.path("open");
+        JsonNode highs = quote.path("high");
+        JsonNode lows = quote.path("low");
+        JsonNode closes = quote.path("close");
+        JsonNode volumes = quote.path("volume");
+
+        List<MarketBar> bars = new ArrayList<>();
+
+        for (int i = 0; i < timestamps.size(); i++) {
+            if (opens.size() <= i || highs.size() <= i
+                    || lows.size() <= i || closes.size() <= i
+                    || volumes.size() <= i) {
                 continue;
             }
 
-            JsonNode daily = entry.getValue();
+            if (opens.get(i).isNull() || highs.get(i).isNull()
+                    || lows.get(i).isNull() || closes.get(i).isNull()
+                    || volumes.get(i).isNull()) {
+                continue;
+            }
 
-            HistoricalPrice price = HistoricalPrice.builder()
-                    .stock(stock)
-                    .tradingDate(tradingDate)
-                    .openPrice(readDecimal(daily, "1. open"))
-                    .highPrice(readDecimal(daily, "2. high"))
-                    .lowPrice(readDecimal(daily, "3. low"))
-                    .closePrice(readDecimal(daily, "4. close"))
-                    .volume(readVolume(daily, "5. volume"))
-                    .build();
+            LocalDate date = Instant.ofEpochSecond(timestamps.get(i).asLong())
+                    .atZone(ZoneId.of("Asia/Kolkata"))
+                    .toLocalDate();
 
-            newPrices.add(price);
+            bars.add(new MarketBar(
+                    date,
+                    decimalNode(opens.get(i)),
+                    decimalNode(highs.get(i)),
+                    decimalNode(lows.get(i)),
+                    decimalNode(closes.get(i)),
+                    volumes.get(i).asLong()
+            ));
         }
 
-        if (!newPrices.isEmpty()) {
-            historicalPriceRepository.saveAll(newPrices);
-            historicalPriceRepository.flush();
+        if (bars.isEmpty()) {
+            throw new IllegalStateException(
+                    "Yahoo Finance returned no usable daily prices for "
+                            + providerSymbol);
         }
 
-        return historicalPriceRepository
-                .findByStockOrderByTradingDateAsc(stock);
+        return bars;
+    }
+
+    private synchronized String getRateLimitedResponse(String url)
+            throws InterruptedException {
+
+        long waitMillis =
+                1000L - (System.currentTimeMillis() - lastRequestTimeMillis);
+
+        if (waitMillis > 0) {
+            Thread.sleep(waitMillis);
+        }
+
+        lastRequestTimeMillis = System.currentTimeMillis();
+        return restTemplate.getForObject(url, String.class);
     }
 
     private String resolveProviderSymbol(String symbol) {
@@ -178,26 +299,25 @@ public class MarketDataService {
         return symbol;
     }
 
-    private synchronized String getRateLimitedResponse(String url)
-            throws InterruptedException {
-
-        long now = System.currentTimeMillis();
-        long waitMillis = 1000L - (now - lastRequestTimeMillis);
-
-        if (waitMillis > 0) {
-            Thread.sleep(waitMillis);
+    private String resolveYahooSymbol(String symbol) {
+        if ("RELIANCE".equals(symbol)) {
+            return "RELIANCE.NS";
         }
 
-        lastRequestTimeMillis = System.currentTimeMillis();
+        // Keep already-qualified provider symbols unchanged.
+        if (symbol.contains(".")) {
+            return symbol;
+        }
 
-        return restTemplate.getForObject(url, String.class);
+        // Do not guess the exchange for every other ticker.
+        throw new IllegalArgumentException(
+                "Yahoo Finance symbol mapping is not configured for " + symbol
+                        + ". Supply its correct provider symbol.");
     }
 
     private String normalizeSymbol(String symbol) {
         if (symbol == null || symbol.isBlank()) {
-            throw new IllegalArgumentException(
-                    "Stock symbol is required"
-            );
+            throw new IllegalArgumentException("Stock symbol is required");
         }
 
         return symbol.trim().toUpperCase(Locale.ROOT);
@@ -207,31 +327,33 @@ public class MarketDataService {
         JsonNode value = node.get(fieldName);
 
         if (value == null || value.isNull() || value.asText().isBlank()) {
-            throw new IllegalStateException(
-                    "Missing market-data field: " + fieldName
-            );
+            throw new IllegalStateException("Missing market-data field: " + fieldName);
         }
 
-        try {
-            return new BigDecimal(value.asText());
-        } catch (NumberFormatException exception) {
-            throw new IllegalStateException(
-                    "Invalid market-data value for " + fieldName,
-                    exception
-            );
-        }
+        return new BigDecimal(value.asText());
     }
 
     private Long readVolume(JsonNode node, String fieldName) {
         JsonNode value = node.get(fieldName);
 
-        if (value == null || value.isNull()
-                || !value.canConvertToLong()) {
+        if (value == null || value.isNull() || !value.canConvertToLong()) {
             throw new IllegalStateException(
-                    "Missing or invalid market-data field: " + fieldName
-            );
+                    "Missing or invalid market-data field: " + fieldName);
         }
 
         return value.asLong();
     }
+
+    private BigDecimal decimalNode(JsonNode node) {
+        return new BigDecimal(node.asText());
+    }
+
+    private record MarketBar(
+            LocalDate date,
+            BigDecimal open,
+            BigDecimal high,
+            BigDecimal low,
+            BigDecimal close,
+            Long volume
+    ) {}
 }
