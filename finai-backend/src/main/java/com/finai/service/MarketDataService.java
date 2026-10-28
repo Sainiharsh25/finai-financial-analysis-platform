@@ -65,43 +65,63 @@ public class MarketDataService {
         List<MarketBar> bars;
         Exception alphaVantageFailure = null;
 
-        // Try Alpha Vantage first, if configured.
+// Try Alpha Vantage first, if configured.
         if (apiKey != null && !apiKey.isBlank()) {
             try {
                 bars = fetchAlphaVantage(normalizedSymbol);
             } catch (Exception exception) {
                 alphaVantageFailure = exception;
+
+                System.err.println(
+                        "Alpha Vantage failed for " + normalizedSymbol
+                                + ": " + exception.getMessage()
+                );
+
                 bars = List.of();
             }
         } else {
-            alphaVantageFailure =
-                    new IllegalStateException("Alpha Vantage API key is not configured");
+            alphaVantageFailure = new IllegalStateException(
+                    "Alpha Vantage API key is not configured"
+            );
+
+            System.err.println(
+                    "Alpha Vantage skipped for " + normalizedSymbol
+                            + ": API key is not configured"
+            );
+
             bars = List.of();
         }
 
-        // Use real Yahoo Finance history when Alpha Vantage fails.
+// Use Yahoo Finance if Alpha Vantage fails.
         if (bars.isEmpty()) {
             try {
                 bars = fetchYahooFinance(normalizedSymbol);
             } catch (Exception yahooFailure) {
-                String message =
-                        "Unable to load historical prices for " + normalizedSymbol
-                                + " from Alpha Vantage or Yahoo Finance. "
-                                + "Check provider symbol support, API limits, and network access.";
+                System.err.println(
+                        "Yahoo Finance failed for " + normalizedSymbol
+                                + ": " + yahooFailure.getMessage()
+                );
 
                 if (alphaVantageFailure != null) {
                     yahooFailure.addSuppressed(alphaVantageFailure);
                 }
 
-                throw new IllegalStateException(message, yahooFailure);
+                throw new IllegalStateException(
+                        "Unable to load historical prices for "
+                                + normalizedSymbol
+                                + " from Alpha Vantage or Yahoo Finance.",
+                        yahooFailure
+                );
             }
         }
 
         if (bars.isEmpty()) {
             throw new IllegalStateException(
-                    "No historical prices returned for " + normalizedSymbol);
+                    "No historical prices returned for " + normalizedSymbol
+            );
         }
 
+// Create the stock only after valid market data has been received.
         if (stock == null) {
             stock = stockRepository.save(
                     Stock.builder()
