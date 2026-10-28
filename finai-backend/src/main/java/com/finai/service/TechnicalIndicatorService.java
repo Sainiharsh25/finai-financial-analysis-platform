@@ -213,6 +213,7 @@ public class TechnicalIndicatorService {
     }
 
 
+
     private Stock getStockWithHistoricalData(String symbol) {
         String normalizedSymbol = normalizeSymbol(symbol);
 
@@ -224,17 +225,25 @@ public class TechnicalIndicatorService {
 
         List<HistoricalPrice> prices = getPrices(stock);
 
+        // Fetch market data when the database has no historical prices.
+        if (prices.isEmpty()) {
+            marketDataService.fetchAndSaveDailyPrices(normalizedSymbol);
+
+            // Reload prices after the fetch-and-save operation.
+            prices = getPrices(stock);
+        }
+
         if (prices.isEmpty()) {
             throw new IllegalStateException(
-                    "No historical prices are stored for " + normalizedSymbol
-                            + ". Market data is unavailable because the provider "
-                            + "rate limit has been reached. Try again after the "
-                            + "provider limit resets or configure another data source."
+                    "No historical prices are available for "
+                            + normalizedSymbol
+                            + ". Check the market-data provider logs and API limits."
             );
         }
 
         return stock;
     }
+
 
     private List<HistoricalPrice> getPrices(Stock stock) {
         return historicalPriceRepository
