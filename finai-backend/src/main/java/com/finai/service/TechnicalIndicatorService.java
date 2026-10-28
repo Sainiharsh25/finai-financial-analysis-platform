@@ -227,9 +227,16 @@ public class TechnicalIndicatorService {
 
         // Fetch market data when the database has no historical prices.
         if (prices.isEmpty()) {
-            marketDataService.fetchAndSaveDailyPrices(normalizedSymbol);
+            try {
+                marketDataService.fetchAndSaveDailyPrices(normalizedSymbol);
+            } catch (Exception e) {
+                throw new IllegalStateException(
+                        "Failed to fetch historical prices for "
+                                + normalizedSymbol + ": " + e.getMessage(),
+                        e
+                );
+            }
 
-            // Reload prices after the fetch-and-save operation.
             prices = getPrices(stock);
         }
 
