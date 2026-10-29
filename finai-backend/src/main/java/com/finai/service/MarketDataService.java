@@ -18,12 +18,15 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
 public class MarketDataService {
+
+    private static final int MIN_CACHED_RECORDS = 100;
 
     @Value("${alphavantage.api.key:}")
     private String apiKey;
@@ -51,77 +54,89 @@ public class MarketDataService {
         Stock stock = stockRepository.findBySymbol(normalizedSymbol)
                 .orElse(null);
 
-        // Reuse stored history. Do not consume API quota for every indicator.
-        if (stock != null) {
-            List<HistoricalPrice> cached =
-                    historicalPriceRepository
-                            .findByStockOrderByTradingDateAsc(stock);
+        List<HistoricalPrice> cached = stock == null
+                ? new ArrayList<>()
+                : historicalPriceRepository
+                .findByStockOrderByTradingDateAsc(stock);
 
-            if (!cached.isEmpty()) {
-                return cached;
-            }
+        // Reuse a sufficiently populated cache.
+        if (cached.size() >= MIN_CACHED_RECORDS) {
+            return cached;
         }
 
-        List<MarketBar> bars;
-        Exception alphaVantageFailure = null;
+        List<MarketBar> bars = List.of();
+        Exception providerFailure = null;
 
-// Try Alpha Vantage first, if configured.
-        if (apiKey != null && !apiKey.isBlank()) {
+        // 1. Try TejHQ first.
+        try {
+            bars = fetchTejHQ(normalizedSymbol);
+        } catch (Exception exception) {
+            providerFailure = exception;
+            System.err.println(
+                    "TejHQ failed for " + normalizedSymbol
+                            + ": " + exception.getMessage()
+            );
+        }
+
+        // 2. Fall back to Alpha Vantage.
+        if (bars.isEmpty() && apiKey != null && !apiKey.isBlank()) {
             try {
                 bars = fetchAlphaVantage(normalizedSymbol);
             } catch (Exception exception) {
-                alphaVantageFailure = exception;
+                if (providerFailure != null) {
+                    exception.addSuppressed(providerFailure);
+                }
+
+                providerFailure = exception;
 
                 System.err.println(
                         "Alpha Vantage failed for " + normalizedSymbol
                                 + ": " + exception.getMessage()
                 );
-
-                bars = List.of();
             }
-        } else {
-            alphaVantageFailure = new IllegalStateException(
-                    "Alpha Vantage API key is not configured"
-            );
-
-            System.err.println(
-                    "Alpha Vantage skipped for " + normalizedSymbol
-                            + ": API key is not configured"
-            );
-
-            bars = List.of();
         }
 
-// Use Yahoo Finance if Alpha Vantage fails.
+        // 3. Fall back to Yahoo Finance.
         if (bars.isEmpty()) {
             try {
                 bars = fetchYahooFinance(normalizedSymbol);
-            } catch (Exception yahooFailure) {
-                System.err.println(
-                        "Yahoo Finance failed for " + normalizedSymbol
-                                + ": " + yahooFailure.getMessage()
-                );
-
-                if (alphaVantageFailure != null) {
-                    yahooFailure.addSuppressed(alphaVantageFailure);
+            } catch (Exception exception) {
+                if (providerFailure != null) {
+                    exception.addSuppressed(providerFailure);
                 }
 
-                throw new IllegalStateException(
-                        "Unable to load historical prices for "
-                                + normalizedSymbol
-                                + " from Alpha Vantage or Yahoo Finance.",
-                        yahooFailure
+                providerFailure = exception;
+
+                System.err.println(
+                        "Yahoo Finance failed for " + normalizedSymbol
+                                + ": " + exception.getMessage()
                 );
             }
         }
 
+        // If providers are unavailable, use existing data if possible.
         if (bars.isEmpty()) {
+            if (!cached.isEmpty()) {
+                System.err.println(
+                        "Using " + cached.size()
+                                + " cached records for " + normalizedSymbol
+                );
+                return cached;
+            }
+
             throw new IllegalStateException(
-                    "No historical prices returned for " + normalizedSymbol
+                    "Unable to load historical prices for "
+                            + normalizedSymbol
+                            + " from TejHQ, Alpha Vantage, or Yahoo Finance.",
+                    providerFailure
             );
         }
 
-// Create the stock only after valid market data has been received.
+        bars = bars.stream()
+                .sorted(Comparator.comparing(MarketBar::date))
+                .toList();
+
+        // Create the stock only after valid market data is received.
         if (stock == null) {
             stock = stockRepository.save(
                     Stock.builder()
@@ -132,6 +147,7 @@ public class MarketDataService {
             );
         }
 
+        // Insert only dates that are not already present.
         List<HistoricalPrice> newPrices = new ArrayList<>();
 
         for (MarketBar bar : bars) {
@@ -162,6 +178,86 @@ public class MarketDataService {
                 .findByStockOrderByTradingDateAsc(stock);
     }
 
+    /**
+     * Fetch daily OHLCV data from TejHQ.
+     * This mapping currently supports RELIANCE only.
+     */
+    private List<MarketBar> fetchTejHQ(String symbol) throws Exception {
+
+        if (!"RELIANCE".equals(symbol)) {
+            throw new IllegalArgumentException(
+                    "TejHQ mapping is configured only for RELIANCE. "
+                            + "Symbol received: " + symbol
+            );
+        }
+
+        LocalDate to = LocalDate.now(ZoneId.of("Asia/Kolkata"));
+        LocalDate from = to.minusDays(365);
+
+        String url = UriComponentsBuilder
+                .fromUriString(
+                        "https://api.tejhq.dev/v1/ohlcv/nse/RELIANCE"
+                )
+                .queryParam("from", from)
+                .queryParam("to", to)
+                .build()
+                .encode()
+                .toUriString();
+
+        String response = restTemplate.getForObject(url, String.class);
+
+        if (response == null || response.isBlank()) {
+            throw new IllegalStateException(
+                    "TejHQ returned an empty response"
+            );
+        }
+
+        JsonNode root = objectMapper.readTree(response);
+
+        if (root.has("error")) {
+            throw new IllegalStateException(
+                    "TejHQ API error: " + root.path("error").asText()
+            );
+        }
+
+        JsonNode data = root.path("data");
+
+        if (!data.isArray() || data.isEmpty()) {
+            throw new IllegalStateException(
+                    "TejHQ returned no historical data for " + symbol
+            );
+        }
+
+        List<MarketBar> bars = new ArrayList<>();
+
+        for (JsonNode row : data) {
+            if (row.path("date").isMissingNode()
+                    || row.path("date").isNull()
+                    || row.path("date").asText().isBlank()) {
+                continue;
+            }
+
+            bars.add(
+                    new MarketBar(
+                            LocalDate.parse(row.path("date").asText()),
+                            readDecimal(row, "open"),
+                            readDecimal(row, "high"),
+                            readDecimal(row, "low"),
+                            readDecimal(row, "close"),
+                            readVolume(row, "volume")
+                    )
+            );
+        }
+
+        if (bars.isEmpty()) {
+            throw new IllegalStateException(
+                    "TejHQ returned no usable daily prices for " + symbol
+            );
+        }
+
+        return bars;
+    }
+
     private List<MarketBar> fetchAlphaVantage(String symbol)
             throws Exception {
 
@@ -179,7 +275,9 @@ public class MarketDataService {
         String response = getRateLimitedResponse(url);
 
         if (response == null || response.isBlank()) {
-            throw new IllegalStateException("Alpha Vantage returned an empty response");
+            throw new IllegalStateException(
+                    "Alpha Vantage returned an empty response"
+            );
         }
 
         JsonNode root = objectMapper.readTree(response);
@@ -188,14 +286,17 @@ public class MarketDataService {
                 || root.has("Note")
                 || root.has("Information")) {
             throw new IllegalStateException(
-                    "Alpha Vantage response: " + root.toString());
+                    "Alpha Vantage returned an error or quota message"
+            );
         }
 
         JsonNode series = root.get("Time Series (Daily)");
 
         if (series == null || !series.fields().hasNext()) {
             throw new IllegalStateException(
-                    "Alpha Vantage returned no daily series for " + providerSymbol);
+                    "Alpha Vantage returned no daily series for "
+                            + providerSymbol
+            );
         }
 
         List<MarketBar> bars = new ArrayList<>();
@@ -205,14 +306,16 @@ public class MarketDataService {
             var entry = fields.next();
             JsonNode daily = entry.getValue();
 
-            bars.add(new MarketBar(
-                    LocalDate.parse(entry.getKey()),
-                    readDecimal(daily, "1. open"),
-                    readDecimal(daily, "2. high"),
-                    readDecimal(daily, "3. low"),
-                    readDecimal(daily, "4. close"),
-                    readVolume(daily, "5. volume")
-            ));
+            bars.add(
+                    new MarketBar(
+                            LocalDate.parse(entry.getKey()),
+                            readDecimal(daily, "1. open"),
+                            readDecimal(daily, "2. high"),
+                            readDecimal(daily, "3. low"),
+                            readDecimal(daily, "4. close"),
+                            readVolume(daily, "5. volume")
+                    )
+            );
         }
 
         return bars;
@@ -224,9 +327,11 @@ public class MarketDataService {
         String providerSymbol = resolveYahooSymbol(symbol);
 
         String url = UriComponentsBuilder
-                .fromUriString("https://query1.finance.yahoo.com/v8/finance/chart/"
-                        + providerSymbol)
-                .queryParam("range", "6mo")
+                .fromUriString(
+                        "https://query1.finance.yahoo.com/v8/finance/chart/"
+                                + providerSymbol
+                )
+                .queryParam("range", "1y")
                 .queryParam("interval", "1d")
                 .build()
                 .encode()
@@ -235,7 +340,9 @@ public class MarketDataService {
         String response = restTemplate.getForObject(url, String.class);
 
         if (response == null || response.isBlank()) {
-            throw new IllegalStateException("Yahoo Finance returned an empty response");
+            throw new IllegalStateException(
+                    "Yahoo Finance returned an empty response"
+            );
         }
 
         JsonNode root = objectMapper.readTree(response);
@@ -243,8 +350,9 @@ public class MarketDataService {
 
         if (result.isMissingNode() || result.isNull()) {
             throw new IllegalStateException(
-                    "Yahoo Finance returned no chart data for " + providerSymbol
-                            + ": " + root.path("chart").path("error"));
+                    "Yahoo Finance returned no chart data for "
+                            + providerSymbol
+            );
         }
 
         JsonNode timestamps = result.path("timestamp");
@@ -272,24 +380,28 @@ public class MarketDataService {
                 continue;
             }
 
-            LocalDate date = Instant.ofEpochSecond(timestamps.get(i).asLong())
+            LocalDate date = Instant.ofEpochSecond(
+                            timestamps.get(i).asLong())
                     .atZone(ZoneId.of("Asia/Kolkata"))
                     .toLocalDate();
 
-            bars.add(new MarketBar(
-                    date,
-                    decimalNode(opens.get(i)),
-                    decimalNode(highs.get(i)),
-                    decimalNode(lows.get(i)),
-                    decimalNode(closes.get(i)),
-                    volumes.get(i).asLong()
-            ));
+            bars.add(
+                    new MarketBar(
+                            date,
+                            decimalNode(opens.get(i)),
+                            decimalNode(highs.get(i)),
+                            decimalNode(lows.get(i)),
+                            decimalNode(closes.get(i)),
+                            volumes.get(i).asLong()
+                    )
+            );
         }
 
         if (bars.isEmpty()) {
             throw new IllegalStateException(
                     "Yahoo Finance returned no usable daily prices for "
-                            + providerSymbol);
+                            + providerSymbol
+            );
         }
 
         return bars;
@@ -306,6 +418,7 @@ public class MarketDataService {
         }
 
         lastRequestTimeMillis = System.currentTimeMillis();
+
         return restTemplate.getForObject(url, String.class);
     }
 
@@ -324,20 +437,21 @@ public class MarketDataService {
             return "RELIANCE.NS";
         }
 
-        // Keep already-qualified provider symbols unchanged.
         if (symbol.contains(".")) {
             return symbol;
         }
 
-        // Do not guess the exchange for every other ticker.
         throw new IllegalArgumentException(
-                "Yahoo Finance symbol mapping is not configured for " + symbol
-                        + ". Supply its correct provider symbol.");
+                "Yahoo Finance symbol mapping is not configured for "
+                        + symbol
+        );
     }
 
     private String normalizeSymbol(String symbol) {
         if (symbol == null || symbol.isBlank()) {
-            throw new IllegalArgumentException("Stock symbol is required");
+            throw new IllegalArgumentException(
+                    "Stock symbol is required"
+            );
         }
 
         return symbol.trim().toUpperCase(Locale.ROOT);
@@ -346,8 +460,12 @@ public class MarketDataService {
     private BigDecimal readDecimal(JsonNode node, String fieldName) {
         JsonNode value = node.get(fieldName);
 
-        if (value == null || value.isNull() || value.asText().isBlank()) {
-            throw new IllegalStateException("Missing market-data field: " + fieldName);
+        if (value == null || value.isNull()
+                || value.asText().isBlank()
+                || !value.isNumber() && !value.isTextual()) {
+            throw new IllegalStateException(
+                    "Missing or invalid market-data field: " + fieldName
+            );
         }
 
         return new BigDecimal(value.asText());
@@ -356,9 +474,11 @@ public class MarketDataService {
     private Long readVolume(JsonNode node, String fieldName) {
         JsonNode value = node.get(fieldName);
 
-        if (value == null || value.isNull() || !value.canConvertToLong()) {
+        if (value == null || value.isNull()
+                || !value.canConvertToLong()) {
             throw new IllegalStateException(
-                    "Missing or invalid market-data field: " + fieldName);
+                    "Missing or invalid market-data field: " + fieldName
+            );
         }
 
         return value.asLong();
@@ -375,5 +495,6 @@ public class MarketDataService {
             BigDecimal low,
             BigDecimal close,
             Long volume
-    ) {}
+    ) {
+    }
 }
