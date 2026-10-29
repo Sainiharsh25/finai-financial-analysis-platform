@@ -7,12 +7,15 @@ import com.finai.entity.Stock;
 import com.finai.repository.HistoricalPriceRepository;
 import com.finai.repository.StockRepository;
 
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -21,24 +24,34 @@ public class HistoricalPriceService {
     private final HistoricalPriceRepository historicalPriceRepository;
     private final StockRepository stockRepository;
 
+
+    @Transactional
     public List<HistoricalPrice> addBulkPrices(
             BulkHistoricalPriceRequest request) {
 
         Stock stock = stockRepository
-                .findBySymbol(request.getSymbol().toUpperCase())
+                .findBySymbol(request.getSymbol().trim().toUpperCase())
                 .orElseThrow(() ->
                         new RuntimeException("Stock not found"));
 
-        List<HistoricalPrice> prices = request.getPrices()
-                .stream()
-                .map(priceRequest -> HistoricalPrice.builder()
+        List<HistoricalPrice> existingPrices =
+                historicalPriceRepository
+                        .findByStockOrderByTradingDateAsc(stock);
+
+        Set<LocalDate> existingDates = existingPrices.stream()
+                .map(HistoricalPrice::getTradingDate)
+                .collect(Collectors.toSet());
+
+        List<HistoricalPrice> prices = request.getPrices().stream()
+                .filter(p -> !existingDates.contains(p.getTradingDate()))
+                .map(p -> HistoricalPrice.builder()
                         .stock(stock)
-                        .tradingDate(priceRequest.getTradingDate())
-                        .openPrice(priceRequest.getOpenPrice())
-                        .highPrice(priceRequest.getHighPrice())
-                        .lowPrice(priceRequest.getLowPrice())
-                        .closePrice(priceRequest.getClosePrice())
-                        .volume(priceRequest.getVolume())
+                        .tradingDate(p.getTradingDate())
+                        .openPrice(p.getOpenPrice())
+                        .highPrice(p.getHighPrice())
+                        .lowPrice(p.getLowPrice())
+                        .closePrice(p.getClosePrice())
+                        .volume(p.getVolume())
                         .build())
                 .toList();
 
