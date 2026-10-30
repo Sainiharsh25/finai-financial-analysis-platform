@@ -1,6 +1,7 @@
 package com.finai.security;
 
 import com.finai.service.CustomUserDetailsService;
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,6 +22,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final CustomUserDetailsService userDetailsService;
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return request.getDispatcherType() == DispatcherType.ERROR
+                || request.getServletPath().startsWith("/api/auth/");
+    }
 
     @Override
     protected void doFilterInternal(
