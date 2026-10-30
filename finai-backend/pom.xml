@@ -74,10 +74,10 @@
 		</dependency>
 
 		<!-- Spring AI + Ollma -->
-<!--		<dependency>-->
-<!--			<groupId>org.springframework.ai</groupId>-->
-<!--			<artifactId>spring-ai-starter-model-ollama</artifactId>-->
-<!--		</dependency>-->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-starter-model-ollama</artifactId>
+		</dependency>
 		<!-- MySQL -->
 		<dependency>
 			<groupId>com.mysql</groupId>
