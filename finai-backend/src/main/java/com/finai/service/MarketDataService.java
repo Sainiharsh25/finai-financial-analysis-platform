@@ -51,6 +51,15 @@ public class MarketDataService {
 
         String normalizedSymbol = normalizeSymbol(symbol);
 
+        // Diagnostic log: confirms the deployed code is executing.
+        System.out.println(
+                "MARKET DATA VERSION CHECK: TCS mapping enabled"
+        );
+
+        System.out.println(
+                "NORMALIZED SYMBOL: [" + normalizedSymbol + "]"
+        );
+
         Stock stock = stockRepository.findBySymbol(normalizedSymbol)
                 .orElse(null);
 
@@ -61,6 +70,11 @@ public class MarketDataService {
 
         // Reuse a sufficiently populated cache.
         if (cached.size() >= MIN_CACHED_RECORDS) {
+            System.out.println(
+                    "Using cached market data for " + normalizedSymbol
+                            + ": " + cached.size() + " records"
+            );
+
             return cached;
         }
 
@@ -70,8 +84,11 @@ public class MarketDataService {
         // 1. Try TejHQ first.
         try {
             bars = fetchTejHQ(normalizedSymbol);
+
         } catch (Exception exception) {
+
             providerFailure = exception;
+
             System.err.println(
                     "TejHQ failed for " + normalizedSymbol
                             + ": " + exception.getMessage()
@@ -80,9 +97,12 @@ public class MarketDataService {
 
         // 2. Fall back to Alpha Vantage.
         if (bars.isEmpty() && apiKey != null && !apiKey.isBlank()) {
+
             try {
                 bars = fetchAlphaVantage(normalizedSymbol);
+
             } catch (Exception exception) {
+
                 if (providerFailure != null) {
                     exception.addSuppressed(providerFailure);
                 }
@@ -98,9 +118,12 @@ public class MarketDataService {
 
         // 3. Fall back to Yahoo Finance.
         if (bars.isEmpty()) {
+
             try {
                 bars = fetchYahooFinance(normalizedSymbol);
+
             } catch (Exception exception) {
+
                 if (providerFailure != null) {
                     exception.addSuppressed(providerFailure);
                 }
@@ -116,11 +139,14 @@ public class MarketDataService {
 
         // If providers are unavailable, use existing data if possible.
         if (bars.isEmpty()) {
+
             if (!cached.isEmpty()) {
+
                 System.err.println(
                         "Using " + cached.size()
                                 + " cached records for " + normalizedSymbol
                 );
+
                 return cached;
             }
 
@@ -138,6 +164,7 @@ public class MarketDataService {
 
         // Create the stock only after valid market data is received.
         if (stock == null) {
+
             stock = stockRepository.save(
                     Stock.builder()
                             .symbol(normalizedSymbol)
@@ -151,6 +178,7 @@ public class MarketDataService {
         List<HistoricalPrice> newPrices = new ArrayList<>();
 
         for (MarketBar bar : bars) {
+
             if (historicalPriceRepository
                     .existsByStockAndTradingDate(stock, bar.date())) {
                 continue;
@@ -170,8 +198,14 @@ public class MarketDataService {
         }
 
         if (!newPrices.isEmpty()) {
+
             historicalPriceRepository.saveAll(newPrices);
             historicalPriceRepository.flush();
+
+            System.out.println(
+                    "Saved " + newPrices.size()
+                            + " new historical records for " + normalizedSymbol
+            );
         }
 
         return historicalPriceRepository
@@ -231,6 +265,7 @@ public class MarketDataService {
         List<MarketBar> bars = new ArrayList<>();
 
         for (JsonNode row : data) {
+
             if (row.path("date").isMissingNode()
                     || row.path("date").isNull()
                     || row.path("date").asText().isBlank()) {
@@ -258,6 +293,9 @@ public class MarketDataService {
         return bars;
     }
 
+    /**
+     * Fetch daily OHLCV data from Alpha Vantage.
+     */
     private List<MarketBar> fetchAlphaVantage(String symbol)
             throws Exception {
 
@@ -285,8 +323,15 @@ public class MarketDataService {
         if (root.has("Error Message")
                 || root.has("Note")
                 || root.has("Information")) {
+
+            String errorMessage = root.has("Error Message")
+                    ? root.path("Error Message").asText()
+                    : root.has("Note")
+                    ? root.path("Note").asText()
+                    : root.path("Information").asText();
+
             throw new IllegalStateException(
-                    "Alpha Vantage returned an error or quota message"
+                    "Alpha Vantage API response: " + errorMessage
             );
         }
 
@@ -303,6 +348,7 @@ public class MarketDataService {
         var fields = series.fields();
 
         while (fields.hasNext()) {
+
             var entry = fields.next();
             JsonNode daily = entry.getValue();
 
@@ -321,10 +367,18 @@ public class MarketDataService {
         return bars;
     }
 
+    /**
+     * Fetch daily OHLCV data from Yahoo Finance.
+     */
     private List<MarketBar> fetchYahooFinance(String symbol)
             throws Exception {
 
         String providerSymbol = resolveYahooSymbol(symbol);
+
+        // Diagnostic log: confirms the exact Yahoo symbol.
+        System.out.println(
+                "YAHOO SYMBOL RESOLVED: [" + providerSymbol + "]"
+        );
 
         String url = UriComponentsBuilder
                 .fromUriString(
@@ -346,18 +400,29 @@ public class MarketDataService {
         }
 
         JsonNode root = objectMapper.readTree(response);
-        JsonNode result = root.path("chart").path("result").path(0);
+
+        JsonNode result = root.path("chart")
+                .path("result")
+                .path(0);
 
         if (result.isMissingNode() || result.isNull()) {
+
+            String yahooError = root.path("chart")
+                    .path("error")
+                    .toString();
+
             throw new IllegalStateException(
                     "Yahoo Finance returned no chart data for "
                             + providerSymbol
+                            + ". Response error: " + yahooError
             );
         }
 
         JsonNode timestamps = result.path("timestamp");
+
         JsonNode quote = result.path("indicators")
-                .path("quote").path(0);
+                .path("quote")
+                .path(0);
 
         JsonNode opens = quote.path("open");
         JsonNode highs = quote.path("high");
@@ -368,14 +433,19 @@ public class MarketDataService {
         List<MarketBar> bars = new ArrayList<>();
 
         for (int i = 0; i < timestamps.size(); i++) {
-            if (opens.size() <= i || highs.size() <= i
-                    || lows.size() <= i || closes.size() <= i
+
+            if (opens.size() <= i
+                    || highs.size() <= i
+                    || lows.size() <= i
+                    || closes.size() <= i
                     || volumes.size() <= i) {
                 continue;
             }
 
-            if (opens.get(i).isNull() || highs.get(i).isNull()
-                    || lows.get(i).isNull() || closes.get(i).isNull()
+            if (opens.get(i).isNull()
+                    || highs.get(i).isNull()
+                    || lows.get(i).isNull()
+                    || closes.get(i).isNull()
                     || volumes.get(i).isNull()) {
                 continue;
             }
@@ -407,11 +477,14 @@ public class MarketDataService {
         return bars;
     }
 
+    /**
+     * Rate-limited Alpha Vantage request.
+     */
     private synchronized String getRateLimitedResponse(String url)
             throws InterruptedException {
 
-        long waitMillis =
-                1000L - (System.currentTimeMillis() - lastRequestTimeMillis);
+        long waitMillis = 1000L
+                - (System.currentTimeMillis() - lastRequestTimeMillis);
 
         if (waitMillis > 0) {
             Thread.sleep(waitMillis);
@@ -422,19 +495,29 @@ public class MarketDataService {
         return restTemplate.getForObject(url, String.class);
     }
 
+    /**
+     * Resolve Alpha Vantage provider symbol.
+     */
     private String resolveProviderSymbol(String symbol) {
+
         if ("RELIANCE".equals(symbol)
                 && relianceProviderSymbol != null
                 && !relianceProviderSymbol.isBlank()) {
-            return relianceProviderSymbol.trim().toUpperCase(Locale.ROOT);
+
+            return relianceProviderSymbol.trim()
+                    .toUpperCase(Locale.ROOT);
         }
 
         return symbol;
     }
 
+    /**
+     * Resolve Yahoo Finance NSE symbols.
+     */
     private String resolveYahooSymbol(String symbol) {
 
         return switch (symbol) {
+
             case "RELIANCE" -> "RELIANCE.NS";
             case "TCS" -> "TCS.NS";
             case "INFY" -> "INFY.NS";
@@ -447,7 +530,11 @@ public class MarketDataService {
         };
     }
 
+    /**
+     * Normalize incoming stock symbols.
+     */
     private String normalizeSymbol(String symbol) {
+
         if (symbol == null || symbol.isBlank()) {
             throw new IllegalArgumentException(
                     "Stock symbol is required"
@@ -458,11 +545,14 @@ public class MarketDataService {
     }
 
     private BigDecimal readDecimal(JsonNode node, String fieldName) {
+
         JsonNode value = node.get(fieldName);
 
-        if (value == null || value.isNull()
+        if (value == null
+                || value.isNull()
                 || value.asText().isBlank()
-                || !value.isNumber() && !value.isTextual()) {
+                || (!value.isNumber() && !value.isTextual())) {
+
             throw new IllegalStateException(
                     "Missing or invalid market-data field: " + fieldName
             );
@@ -472,10 +562,13 @@ public class MarketDataService {
     }
 
     private Long readVolume(JsonNode node, String fieldName) {
+
         JsonNode value = node.get(fieldName);
 
-        if (value == null || value.isNull()
+        if (value == null
+                || value.isNull()
                 || !value.canConvertToLong()) {
+
             throw new IllegalStateException(
                     "Missing or invalid market-data field: " + fieldName
             );
