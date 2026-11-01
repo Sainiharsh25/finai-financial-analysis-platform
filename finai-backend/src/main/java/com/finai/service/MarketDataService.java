@@ -433,18 +433,18 @@ public class MarketDataService {
     }
 
     private String resolveYahooSymbol(String symbol) {
-        if ("RELIANCE".equals(symbol)) {
-            return "RELIANCE.NS";
-        }
 
-        if (symbol.contains(".")) {
-            return symbol;
-        }
+        return switch (symbol) {
+            case "RELIANCE" -> "RELIANCE.NS";
+            case "TCS" -> "TCS.NS";
+            case "INFY" -> "INFY.NS";
+            case "HDFCBANK" -> "HDFCBANK.NS";
 
-        throw new IllegalArgumentException(
-                "Yahoo Finance symbol mapping is not configured for "
-                        + symbol
-        );
+            default -> throw new IllegalArgumentException(
+                    "Yahoo Finance symbol mapping is not configured for "
+                            + symbol
+            );
+        };
     }
 
     private String normalizeSymbol(String symbol) {
