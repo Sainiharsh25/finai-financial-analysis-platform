@@ -12,7 +12,6 @@ import {
   Sun,
 } from 'lucide-react'
 import { usePreferences } from '../../hooks/PreferencesContext'
-
 function Navbar() {
   const navigate = useNavigate()
   const menuRef = useRef(null)
@@ -96,7 +95,7 @@ function Navbar() {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
     setShowLogoutPopup(false)
-    navigate('/login', { replace: true })
+    navigate('/', { replace: true })
   }
 
   const panel = isDark
