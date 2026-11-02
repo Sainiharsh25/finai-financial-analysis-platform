@@ -37,7 +37,6 @@ public class MarketDataService {
     @Value("${alphavantage.symbol.RELIANCE:RELIANCE}")
     private String relianceSymbol;
 
-    // Verified Alpha Vantage symbol for Tata Consultancy Services.
     @Value("${alphavantage.symbol.TCS:TCS.BSE}")
     private String tcsSymbol;
 
@@ -72,7 +71,7 @@ public class MarketDataService {
                 : historicalPriceRepository
                 .findByStockOrderByTradingDateAsc(stock);
 
-        // Avoid unnecessary API calls when 100 or more records exist.
+        // Return cached records when at least 100 records are available.
         if (cached.size() >= MIN_CACHED_RECORDS) {
             System.out.println(
                     "Returning " + cached.size()
@@ -84,7 +83,7 @@ public class MarketDataService {
         List<MarketBar> bars = List.of();
         Exception providerFailure = null;
 
-        // 1. Alpha Vantage is the primary provider.
+        // Primary provider: Alpha Vantage.
         try {
             bars = fetchAlphaVantage(normalizedSymbol);
 
@@ -97,7 +96,7 @@ public class MarketDataService {
             );
         }
 
-        // 2. TejHQ is only a fallback for RELIANCE.
+        // Fallback provider: TejHQ for RELIANCE only.
         if (bars.isEmpty() && "RELIANCE".equals(normalizedSymbol)) {
             try {
                 bars = fetchTejHQ(normalizedSymbol);
@@ -116,7 +115,7 @@ public class MarketDataService {
             }
         }
 
-        // 3. Use cached records if providers are unavailable.
+        // Return existing cached records if providers fail.
         if (bars.isEmpty()) {
             if (!cached.isEmpty()) {
                 System.out.println(
@@ -138,6 +137,7 @@ public class MarketDataService {
                 .sorted(Comparator.comparing(MarketBar::date))
                 .toList();
 
+        // Create the stock record if it does not already exist.
         if (stock == null) {
             stock = stockRepository.save(
                     Stock.builder()
@@ -156,6 +156,7 @@ public class MarketDataService {
             );
         }
 
+        // Insert only dates that are not already stored.
         List<HistoricalPrice> newPrices = new ArrayList<>();
 
         for (MarketBar bar : bars) {
@@ -203,6 +204,11 @@ public class MarketDataService {
 
         String providerSymbol = resolveAlphaVantageSymbol(symbol);
 
+        // Diagnostic log: confirms the exact provider symbol.
+        System.out.println(
+                "ALPHA VANTAGE PROVIDER SYMBOL: " + providerSymbol
+        );
+
         String url = UriComponentsBuilder
                 .fromUriString(baseUrl)
                 .queryParam("function", "TIME_SERIES_DAILY")
@@ -223,14 +229,31 @@ public class MarketDataService {
 
         JsonNode root = objectMapper.readTree(response);
 
+        // Log the actual provider rejection reason.
         if (root.has("Error Message")
                 || root.has("Note")
                 || root.has("Information")) {
 
-            // Do not log the raw response because it may contain sensitive data.
+            String providerError;
+
+            if (root.has("Error Message")) {
+                providerError = root.get("Error Message").asText();
+            } else if (root.has("Note")) {
+                providerError = root.get("Note").asText();
+            } else {
+                providerError = root.get("Information").asText();
+            }
+
+            System.err.println(
+                    "Alpha Vantage rejected symbol: " + providerSymbol
+            );
+
+            System.err.println(
+                    "Alpha Vantage response: " + providerError
+            );
+
             throw new IllegalStateException(
-                    "Alpha Vantage rejected the request. "
-                            + "Check symbol support, API quota and API key."
+                    "Alpha Vantage rejected the request: " + providerError
             );
         }
 
@@ -313,6 +336,7 @@ public class MarketDataService {
         List<MarketBar> bars = new ArrayList<>();
 
         for (JsonNode row : data) {
+
             if (row.path("date").isMissingNode()
                     || row.path("date").isNull()
                     || row.path("date").asText().isBlank()) {
@@ -343,7 +367,7 @@ public class MarketDataService {
     private synchronized String getRateLimitedResponse(String url)
             throws InterruptedException {
 
-        // Avoid rapid consecutive Alpha Vantage requests.
+        // Keep at least 1.2 seconds between provider requests.
         long waitMillis = 1200L - (
                 System.currentTimeMillis() - lastRequestTimeMillis
         );
@@ -429,19 +453,17 @@ public class MarketDataService {
 
     private String safeErrorMessage(Exception exception) {
 
-        // Never expose the provider URL or API key in logs.
         String message = exception.getMessage();
 
         if (message == null) {
             message = "No additional details";
         }
 
-        message = message.replaceAll(
+        // Redact API key if it appears in an exception message.
+        return message.replaceAll(
                 "(?i)(apikey=)[^&\\s]+",
                 "$1[REDACTED]"
         );
-
-        return exception.getClass().getSimpleName() + ": " + message;
     }
 
     private record MarketBar(
