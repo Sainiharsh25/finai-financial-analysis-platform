@@ -1,4 +1,3 @@
-
 package com.finai.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -38,7 +37,8 @@ public class MarketDataService {
     @Value("${alphavantage.symbol.RELIANCE:RELIANCE}")
     private String relianceSymbol;
 
-    @Value("${alphavantage.symbol.TCS:TCS}")
+    // Verified Alpha Vantage symbol for Tata Consultancy Services.
+    @Value("${alphavantage.symbol.TCS:TCS.BSE}")
     private String tcsSymbol;
 
     @Value("${alphavantage.symbol.INFY:INFY}")
@@ -61,12 +61,8 @@ public class MarketDataService {
 
         String normalizedSymbol = normalizeSymbol(symbol);
 
-        System.out.println(
-                "MARKET DATA VERSION: ALPHA VANTAGE PRIMARY"
-        );
-        System.out.println(
-                "NORMALIZED SYMBOL: [" + normalizedSymbol + "]"
-        );
+        System.out.println("MARKET DATA VERSION: ALPHA VANTAGE PRIMARY");
+        System.out.println("NORMALIZED SYMBOL: [" + normalizedSymbol + "]");
 
         Stock stock = stockRepository.findBySymbol(normalizedSymbol)
                 .orElse(null);
@@ -76,8 +72,7 @@ public class MarketDataService {
                 : historicalPriceRepository
                 .findByStockOrderByTradingDateAsc(stock);
 
-        // Avoid unnecessary API calls when the database
-        // already contains 100 or more historical records.
+        // Avoid unnecessary API calls when 100 or more records exist.
         if (cached.size() >= MIN_CACHED_RECORDS) {
             System.out.println(
                     "Returning " + cached.size()
@@ -147,8 +142,16 @@ public class MarketDataService {
             stock = stockRepository.save(
                     Stock.builder()
                             .symbol(normalizedSymbol)
-                            .companyName(normalizedSymbol)
-                            .exchange("NSE")
+                            .companyName(
+                                    "TCS".equals(normalizedSymbol)
+                                            ? "Tata Consultancy Services Limited"
+                                            : normalizedSymbol
+                            )
+                            .exchange(
+                                    "TCS".equals(normalizedSymbol)
+                                            ? "BSE"
+                                            : "NSE"
+                            )
                             .build()
             );
         }
@@ -224,8 +227,7 @@ public class MarketDataService {
                 || root.has("Note")
                 || root.has("Information")) {
 
-            // Do not log or expose the raw response:
-            // provider messages may contain sensitive information.
+            // Do not log the raw response because it may contain sensitive data.
             throw new IllegalStateException(
                     "Alpha Vantage rejected the request. "
                             + "Check symbol support, API quota and API key."
@@ -341,11 +343,10 @@ public class MarketDataService {
     private synchronized String getRateLimitedResponse(String url)
             throws InterruptedException {
 
-        // Alpha Vantage free tier has a daily quota.
-        // This delay also avoids rapid consecutive calls.
-        long waitMillis =
-                1200L - (System.currentTimeMillis()
-                        - lastRequestTimeMillis);
+        // Avoid rapid consecutive Alpha Vantage requests.
+        long waitMillis = 1200L - (
+                System.currentTimeMillis() - lastRequestTimeMillis
+        );
 
         if (waitMillis > 0) {
             Thread.sleep(waitMillis);
@@ -428,11 +429,19 @@ public class MarketDataService {
 
     private String safeErrorMessage(Exception exception) {
 
-        // Never return the provider's raw URL or API response.
-        // Alpha Vantage may echo the API key in its response.
-        return exception.getClass().getSimpleName()
-                + ": " + exception.getMessage()
-                .replaceAll("(?i)(apikey=)[^&\\s]+", "$1[REDACTED]");
+        // Never expose the provider URL or API key in logs.
+        String message = exception.getMessage();
+
+        if (message == null) {
+            message = "No additional details";
+        }
+
+        message = message.replaceAll(
+                "(?i)(apikey=)[^&\\s]+",
+                "$1[REDACTED]"
+        );
+
+        return exception.getClass().getSimpleName() + ": " + message;
     }
 
     private record MarketBar(
