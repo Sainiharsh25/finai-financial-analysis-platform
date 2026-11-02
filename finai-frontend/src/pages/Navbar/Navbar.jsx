@@ -12,6 +12,7 @@ import {
   Sun,
 } from 'lucide-react'
 import { usePreferences } from '../../hooks/PreferencesContext'
+
 function Navbar() {
   const navigate = useNavigate()
   const menuRef = useRef(null)
@@ -31,6 +32,7 @@ function Navbar() {
     }
   })
 
+  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = event => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -54,6 +56,7 @@ function Navbar() {
     }
   }, [])
 
+  // Update user information when storage changes
   useEffect(() => {
     const handleStorage = () => {
       try {
@@ -66,7 +69,9 @@ function Navbar() {
 
     window.addEventListener('storage', handleStorage)
 
-    return () => window.removeEventListener('storage', handleStorage)
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+    }
   }, [])
 
   const name =
@@ -77,7 +82,12 @@ function Navbar() {
     'My Account'
 
   const email = user.email || ''
-  const photo = user.picture || user.photoURL || user.profilePicture || ''
+
+  const photo =
+    user.picture ||
+    user.photoURL ||
+    user.profilePicture ||
+    ''
 
   const initials = name
     .split(/\s+/)
@@ -91,20 +101,32 @@ function Navbar() {
     setShowLogoutPopup(true)
   }
 
+  // Logout and redirect to deployed landing page
   const confirmLogout = () => {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
+
     setShowLogoutPopup(false)
-    navigate('/', { replace: true })
+    setOpen(false)
+    setUser({})
+    setImageError(false)
+
+    window.location.replace(
+      'https://finai-financial-analysis-platform.vercel.app/'
+    )
   }
 
   const panel = isDark
     ? 'border-slate-700 bg-slate-900 text-slate-100'
     : 'border-slate-200 bg-white text-slate-900'
 
-  const mutedText = isDark ? 'text-slate-400' : 'text-slate-500'
+  const mutedText = isDark
+    ? 'text-slate-400'
+    : 'text-slate-500'
 
-  const hoverBg = isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-50'
+  const hoverBg = isDark
+    ? 'hover:bg-slate-800'
+    : 'hover:bg-slate-50'
 
   return (
     <>
@@ -116,8 +138,12 @@ function Navbar() {
         <button
           type="button"
           onClick={toggleDarkMode}
-          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-          title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          aria-label={
+            isDark ? 'Switch to light mode' : 'Switch to dark mode'
+          }
+          title={
+            isDark ? 'Switch to light mode' : 'Switch to dark mode'
+          }
           className={`mr-2 rounded-xl border p-2.5 transition ${
             isDark
               ? 'border-slate-700 bg-slate-800 text-amber-300 hover:bg-slate-700'
@@ -142,7 +168,9 @@ function Navbar() {
               referrerPolicy="no-referrer"
               onError={() => setImageError(true)}
               className={`h-10 w-10 rounded-full border object-cover ${
-                isDark ? 'border-slate-700' : 'border-slate-200'
+                isDark
+                  ? 'border-slate-700'
+                  : 'border-slate-200'
               }`}
             />
           ) : (
@@ -152,11 +180,14 @@ function Navbar() {
           )}
 
           <div className="hidden text-left sm:block">
-            <p className={`max-w-36 truncate text-sm font-semibold ${
-              isDark ? 'text-slate-100' : 'text-slate-800'
-            }`}>
+            <p
+              className={`max-w-36 truncate text-sm font-semibold ${
+                isDark ? 'text-slate-100' : 'text-slate-800'
+              }`}
+            >
               {name}
             </p>
+
             <p className={`max-w-36 truncate text-xs ${mutedText}`}>
               {email || 'My account'}
             </p>
@@ -177,10 +208,15 @@ function Navbar() {
           >
             <div
               className={`border-b px-4 py-4 ${
-                isDark ? 'border-slate-700' : 'border-slate-100'
+                isDark
+                  ? 'border-slate-700'
+                  : 'border-slate-100'
               }`}
             >
-              <p className="truncate text-sm font-semibold">{name}</p>
+              <p className="truncate text-sm font-semibold">
+                {name}
+              </p>
+
               <p className={`mt-1 truncate text-xs ${mutedText}`}>
                 {email}
               </p>
