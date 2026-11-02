@@ -1,7 +1,10 @@
+
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 
 import MainLayout from './components/layout/MainLayout'
 import ProtectedRoute from './components/common/ProtectedRoute'
+
+import LandingPage from './pages/LandingPage/LandingPage'
 import FinanceLearning from './pages/FinanceLearning/FinanceLearning'
 import Dashboard from './pages/Dashboard/Dashboard'
 import StockAnalysis from './pages/StockAnalysis/StockAnalysis'
@@ -11,30 +14,21 @@ import Portfolio from './pages/Portfolio/Portfolio'
 import Watchlist from './pages/Watchlist/Watchlist'
 import Login from './pages/Login/Login'
 import Settings from './pages/Settings/Settings'
-import Signup from "./pages/Signup";
+import Signup from './pages/Signup'
+
 function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public landing page */}
+        <Route path="/" element={<LandingPage />} />
 
-        {/* Public route */}
+        {/* Public authentication routes */}
         <Route path="/login" element={<Login />} />
-
         <Route path="/signup" element={<Signup />} />
         <Route path="/learning" element={<FinanceLearning />} />
 
-        {/* Protected application */}
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <MainLayout>
-                <Dashboard />
-              </MainLayout>
-            </ProtectedRoute>
-          }
-        />
-
+        {/* Protected dashboard */}
         <Route
           path="/dashboard"
           element={
@@ -112,9 +106,8 @@ function App() {
           }
         />
 
-        {/* Unknown URL */}
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-
+        {/* Unknown URLs return to landing page */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   )
