@@ -101,20 +101,20 @@ function Navbar() {
     setShowLogoutPopup(true)
   }
 
-  // Logout and redirect to deployed landing page
   const confirmLogout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
+  // Clear login session
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
 
-    setShowLogoutPopup(false)
-    setOpen(false)
-    setUser({})
-    setImageError(false)
+  // Close popup and dropdown
+  setShowLogoutPopup(false)
+  setOpen(false)
 
-    window.location.replace(
-      'https://finai-financial-analysis-platform.vercel.app/'
-    )
-  }
+  // Redirect to the public landing page
+  window.location.replace(
+    'https://finai-financial-analysis-platform.vercel.app/'
+  )
+}
 
   const panel = isDark
     ? 'border-slate-700 bg-slate-900 text-slate-100'
