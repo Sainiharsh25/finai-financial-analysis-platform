@@ -112,7 +112,7 @@ function Navbar() {
 
   // Redirect to the public landing page
   window.location.replace(
-    'https://finai-financial-analysis-platform.vercel.app/'
+    'https://finai-financial-analysis-platform.vercel.app'
   )
 }
 

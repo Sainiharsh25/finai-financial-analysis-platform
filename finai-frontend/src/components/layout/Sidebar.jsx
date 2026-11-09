@@ -1,6 +1,5 @@
-
 import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   BarChart3,
@@ -27,12 +26,20 @@ const menuItems = [
 ]
 
 function Sidebar() {
+  const navigate = useNavigate()
   const [showLogoutModal, setShowLogoutModal] = useState(false)
+
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+
+    setShowLogoutModal(false)
+    navigate('/', { replace: true })
+  }
 
   return (
     <>
       <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col border-r border-slate-800 bg-slate-950 text-white">
-        {/* Logo */}
         <div className="shrink-0 border-b border-slate-800 px-6 py-5">
           <h1 className="text-2xl font-bold">FinAI</h1>
           <p className="mt-1 text-xs text-slate-400">
@@ -40,7 +47,6 @@ function Sidebar() {
           </p>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-5">
           <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
             Menu
@@ -70,9 +76,7 @@ function Sidebar() {
           </div>
         </nav>
 
-        {/* Bottom Section */}
         <div className="shrink-0 border-t border-slate-800">
-          {/* Logout */}
           <div className="px-3 py-3">
             <button
               type="button"
@@ -84,7 +88,6 @@ function Sidebar() {
             </button>
           </div>
 
-          {/* AI Assistant */}
           <div className="border-t border-slate-800 p-4">
             <div className="rounded-lg bg-slate-900 p-3">
               <p className="text-sm font-medium">AI Assistant</p>
@@ -96,14 +99,10 @@ function Sidebar() {
         </div>
       </aside>
 
-      {/* Logout Confirmation Modal */}
       <ConfirmModal
         isOpen={showLogoutModal}
         onCancel={() => setShowLogoutModal(false)}
-        onConfirm={() => {
-          localStorage.removeItem('token')
-          window.location.href = '/login'
-        }}
+        onConfirm={handleLogout}
       />
     </>
   )
