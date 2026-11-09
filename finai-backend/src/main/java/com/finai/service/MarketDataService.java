@@ -1,3 +1,4 @@
+
 package com.finai.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -26,7 +27,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class MarketDataService {
 
-    private static final int MIN_CACHED_RECORDS = 100;
+    private static final int CACHE_VALIDITY_DAYS = 5;
 
     @Value("${alphavantage.api.key:}")
     private String apiKey;
@@ -71,11 +72,22 @@ public class MarketDataService {
                 : historicalPriceRepository
                 .findByStockOrderByTradingDateAsc(stock);
 
-        // Return cached records when at least 100 records are available.
-        if (cached.size() >= MIN_CACHED_RECORDS) {
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Kolkata"));
+
+        LocalDate latestCachedDate = cached.isEmpty()
+                ? null
+                : cached.get(cached.size() - 1).getTradingDate();
+
+        boolean cacheIsRecent = latestCachedDate != null
+                && !latestCachedDate.isBefore(
+                today.minusDays(CACHE_VALIDITY_DAYS)
+        );
+
+        // Return cached data without consuming API calls.
+        if (cacheIsRecent) {
             System.out.println(
-                    "Returning " + cached.size()
-                            + " cached records for " + normalizedSymbol
+                    "Returning cached prices for " + normalizedSymbol
+                            + ". Latest trading date: " + latestCachedDate
             );
             return cached;
         }
@@ -115,7 +127,7 @@ public class MarketDataService {
             }
         }
 
-        // Return existing cached records if providers fail.
+        // Return cached records if providers fail.
         if (bars.isEmpty()) {
             if (!cached.isEmpty()) {
                 System.out.println(
@@ -128,7 +140,7 @@ public class MarketDataService {
             throw new IllegalStateException(
                     "Unable to load historical prices for "
                             + normalizedSymbol
-                            + ". Check provider availability and symbol support.",
+                            + ". No cached prices are available.",
                     providerFailure
             );
         }
@@ -137,7 +149,7 @@ public class MarketDataService {
                 .sorted(Comparator.comparing(MarketBar::date))
                 .toList();
 
-        // Create the stock record if it does not already exist.
+        // Create stock record if it does not exist.
         if (stock == null) {
             stock = stockRepository.save(
                     Stock.builder()
@@ -204,7 +216,6 @@ public class MarketDataService {
 
         String providerSymbol = resolveAlphaVantageSymbol(symbol);
 
-        // Diagnostic log: confirms the exact provider symbol.
         System.out.println(
                 "ALPHA VANTAGE PROVIDER SYMBOL: " + providerSymbol
         );
@@ -229,7 +240,6 @@ public class MarketDataService {
 
         JsonNode root = objectMapper.readTree(response);
 
-        // Log the actual provider rejection reason.
         if (root.has("Error Message")
                 || root.has("Note")
                 || root.has("Information")) {
@@ -245,11 +255,8 @@ public class MarketDataService {
             }
 
             System.err.println(
-                    "Alpha Vantage rejected symbol: " + providerSymbol
-            );
-
-            System.err.println(
-                    "Alpha Vantage response: " + providerError
+                    "Alpha Vantage provider error for " + providerSymbol
+                            + ": " + providerError
             );
 
             throw new IllegalStateException(
@@ -368,9 +375,8 @@ public class MarketDataService {
             throws InterruptedException {
 
         // Keep at least 1.2 seconds between provider requests.
-        long waitMillis = 1200L - (
-                System.currentTimeMillis() - lastRequestTimeMillis
-        );
+        long waitMillis = 1200L
+                - (System.currentTimeMillis() - lastRequestTimeMillis);
 
         if (waitMillis > 0) {
             Thread.sleep(waitMillis);
@@ -412,10 +418,7 @@ public class MarketDataService {
         return symbol.trim().toUpperCase(Locale.ROOT);
     }
 
-    private BigDecimal readDecimal(
-            JsonNode node,
-            String fieldName
-    ) {
+    private BigDecimal readDecimal(JsonNode node, String fieldName) {
 
         JsonNode value = node.get(fieldName);
 
@@ -432,10 +435,7 @@ public class MarketDataService {
         return new BigDecimal(value.asText());
     }
 
-    private Long readVolume(
-            JsonNode node,
-            String fieldName
-    ) {
+    private Long readVolume(JsonNode node, String fieldName) {
 
         JsonNode value = node.get(fieldName);
 
