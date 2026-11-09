@@ -8,9 +8,9 @@ import com.finai.entity.Stock;
 import com.finai.repository.HistoricalPriceRepository;
 import com.finai.repository.StockRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -21,50 +21,55 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class MarketDataService {
 
+    private static final String TEJHQ_BASE_URL =
+            "https://api.tejhq.dev/v1/ohlcv";
+
+    private static final String EXCHANGE = "nse";
+
     private static final int CACHE_VALIDITY_DAYS = 5;
 
-    @Value("${alphavantage.api.key:}")
-    private String apiKey;
+    private static final int HISTORY_DAYS = 365;
 
-    @Value("${alphavantage.base.url:https://www.alphavantage.co/query}")
-    private String baseUrl;
-
-    @Value("${alphavantage.symbol.RELIANCE:RELIANCE}")
-    private String relianceSymbol;
-
-    @Value("${alphavantage.symbol.TCS:TCS.BSE}")
-    private String tcsSymbol;
-
-    @Value("${alphavantage.symbol.INFY:INFY}")
-    private String infySymbol;
-
-    @Value("${alphavantage.symbol.HDFCBANK:HDFCBANK}")
-    private String hdfcSymbol;
+    private static final ZoneId INDIA_ZONE =
+            ZoneId.of("Asia/Kolkata");
 
     private final StockRepository stockRepository;
+
     private final HistoricalPriceRepository historicalPriceRepository;
 
     private final RestTemplate restTemplate = new RestTemplate();
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private static long lastRequestTimeMillis = 0L;
-
+    /**
+     * Fetch daily market prices from TejHQ.
+     *
+     * 1. Normalize the stock symbol.
+     * 2. Check the local database cache.
+     * 3. Return recent cached data when available.
+     * 4. Fetch historical OHLCV from TejHQ when required.
+     * 5. Save missing trading dates.
+     * 6. Return all stored historical prices.
+     */
     @Transactional
     public List<HistoricalPrice> fetchAndSaveDailyPrices(String symbol)
             throws Exception {
 
         String normalizedSymbol = normalizeSymbol(symbol);
 
-        System.out.println("MARKET DATA VERSION: ALPHA VANTAGE PRIMARY");
-        System.out.println("NORMALIZED SYMBOL: [" + normalizedSymbol + "]");
+        System.out.println("======================================");
+        System.out.println("MARKET DATA PROVIDER: TEJHQ");
+        System.out.println("STOCK SYMBOL: " + normalizedSymbol);
+        System.out.println("EXCHANGE: NSE");
+        System.out.println("======================================");
 
-        Stock stock = stockRepository.findBySymbol(normalizedSymbol)
+        Stock stock = stockRepository
+                .findBySymbol(normalizedSymbol)
                 .orElse(null);
 
         List<HistoricalPrice> cached = stock == null
@@ -72,7 +77,7 @@ public class MarketDataService {
                 : historicalPriceRepository
                 .findByStockOrderByTradingDateAsc(stock);
 
-        LocalDate today = LocalDate.now(ZoneId.of("Asia/Kolkata"));
+        LocalDate today = LocalDate.now(INDIA_ZONE);
 
         LocalDate latestCachedDate = cached.isEmpty()
                 ? null
@@ -83,65 +88,61 @@ public class MarketDataService {
                 today.minusDays(CACHE_VALIDITY_DAYS)
         );
 
-        // Return cached data without consuming API calls.
         if (cacheIsRecent) {
+
             System.out.println(
-                    "Returning cached prices for " + normalizedSymbol
-                            + ". Latest trading date: " + latestCachedDate
+                    "CACHE HIT: " + normalizedSymbol
+                            + " | Latest date: " + latestCachedDate
             );
+
             return cached;
         }
 
-        List<MarketBar> bars = List.of();
-        Exception providerFailure = null;
+        System.out.println(
+                "CACHE MISS: Fetching TejHQ data for "
+                        + normalizedSymbol
+        );
 
-        // Primary provider: Alpha Vantage.
+        List<MarketBar> bars;
+
         try {
-            bars = fetchAlphaVantage(normalizedSymbol);
+
+            bars = fetchTejHQ(normalizedSymbol);
 
         } catch (Exception exception) {
-            providerFailure = exception;
 
             System.err.println(
-                    "Alpha Vantage failed for " + normalizedSymbol
-                            + ": " + safeErrorMessage(exception)
+                    "TEJHQ ERROR: " + normalizedSymbol
+                            + " | " + safeErrorMessage(exception)
             );
-        }
 
-        // Fallback provider: TejHQ for RELIANCE only.
-        if (bars.isEmpty() && "RELIANCE".equals(normalizedSymbol)) {
-            try {
-                bars = fetchTejHQ(normalizedSymbol);
-
-            } catch (Exception exception) {
-                if (providerFailure != null) {
-                    exception.addSuppressed(providerFailure);
-                }
-
-                providerFailure = exception;
-
-                System.err.println(
-                        "TejHQ failed for " + normalizedSymbol
-                                + ": " + safeErrorMessage(exception)
-                );
-            }
-        }
-
-        // Return cached records if providers fail.
-        if (bars.isEmpty()) {
             if (!cached.isEmpty()) {
+
                 System.out.println(
-                        "Returning cached fallback data for "
+                        "Using existing cached prices for "
                                 + normalizedSymbol
                 );
+
                 return cached;
             }
 
             throw new IllegalStateException(
-                    "Unable to load historical prices for "
+                    "Unable to fetch historical prices for "
                             + normalizedSymbol
                             + ". No cached prices are available.",
-                    providerFailure
+                    exception
+            );
+        }
+
+        if (bars.isEmpty()) {
+
+            if (!cached.isEmpty()) {
+                return cached;
+            }
+
+            throw new IllegalStateException(
+                    "TejHQ returned no historical prices for "
+                            + normalizedSymbol
             );
         }
 
@@ -149,36 +150,35 @@ public class MarketDataService {
                 .sorted(Comparator.comparing(MarketBar::date))
                 .toList();
 
-        // Create stock record if it does not exist.
         if (stock == null) {
+
             stock = stockRepository.save(
                     Stock.builder()
                             .symbol(normalizedSymbol)
                             .companyName(
-                                    "TCS".equals(normalizedSymbol)
-                                            ? "Tata Consultancy Services Limited"
-                                            : normalizedSymbol
+                                    getCompanyName(normalizedSymbol)
                             )
-                            .exchange(
-                                    "TCS".equals(normalizedSymbol)
-                                            ? "BSE"
-                                            : "NSE"
-                            )
+                            .exchange("NSE")
                             .build()
             );
         }
 
-        // Insert only dates that are not already stored.
         List<HistoricalPrice> newPrices = new ArrayList<>();
 
         for (MarketBar bar : bars) {
 
-            if (historicalPriceRepository
-                    .existsByStockAndTradingDate(stock, bar.date())) {
+            boolean alreadyExists =
+                    historicalPriceRepository
+                            .existsByStockAndTradingDate(
+                                    stock,
+                                    bar.date()
+                            );
+
+            if (alreadyExists) {
                 continue;
             }
 
-            newPrices.add(
+            HistoricalPrice historicalPrice =
                     HistoricalPrice.builder()
                             .stock(stock)
                             .tradingDate(bar.date())
@@ -187,156 +187,110 @@ public class MarketDataService {
                             .lowPrice(bar.low())
                             .closePrice(bar.close())
                             .volume(bar.volume())
-                            .build()
-            );
+                            .build();
+
+            newPrices.add(historicalPrice);
         }
 
         if (!newPrices.isEmpty()) {
+
             historicalPriceRepository.saveAll(newPrices);
+
             historicalPriceRepository.flush();
         }
 
         System.out.println(
-                "Saved " + newPrices.size()
-                        + " new records for " + normalizedSymbol
+                "TEJHQ RECORDS RECEIVED: " + bars.size()
+        );
+
+        System.out.println(
+                "NEW RECORDS SAVED: " + newPrices.size()
+        );
+
+        System.out.println(
+                "STOCK: " + normalizedSymbol
         );
 
         return historicalPriceRepository
                 .findByStockOrderByTradingDateAsc(stock);
     }
 
-    private List<MarketBar> fetchAlphaVantage(String symbol)
-            throws Exception {
-
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException(
-                    "Alpha Vantage API key is not configured"
-            );
-        }
-
-        String providerSymbol = resolveAlphaVantageSymbol(symbol);
-
-        System.out.println(
-                "ALPHA VANTAGE PROVIDER SYMBOL: " + providerSymbol
-        );
-
-        String url = UriComponentsBuilder
-                .fromUriString(baseUrl)
-                .queryParam("function", "TIME_SERIES_DAILY")
-                .queryParam("symbol", providerSymbol)
-                .queryParam("outputsize", "compact")
-                .queryParam("apikey", apiKey)
-                .build()
-                .encode()
-                .toUriString();
-
-        String response = getRateLimitedResponse(url);
-
-        if (response == null || response.isBlank()) {
-            throw new IllegalStateException(
-                    "Alpha Vantage returned an empty response"
-            );
-        }
-
-        JsonNode root = objectMapper.readTree(response);
-
-        if (root.has("Error Message")
-                || root.has("Note")
-                || root.has("Information")) {
-
-            String providerError;
-
-            if (root.has("Error Message")) {
-                providerError = root.get("Error Message").asText();
-            } else if (root.has("Note")) {
-                providerError = root.get("Note").asText();
-            } else {
-                providerError = root.get("Information").asText();
-            }
-
-            System.err.println(
-                    "Alpha Vantage provider error for " + providerSymbol
-                            + ": " + providerError
-            );
-
-            throw new IllegalStateException(
-                    "Alpha Vantage rejected the request: " + providerError
-            );
-        }
-
-        JsonNode series = root.get("Time Series (Daily)");
-
-        if (series == null || !series.fields().hasNext()) {
-            throw new IllegalStateException(
-                    "No daily time series returned for provider symbol "
-                            + providerSymbol
-            );
-        }
-
-        List<MarketBar> bars = new ArrayList<>();
-
-        var fields = series.fields();
-
-        while (fields.hasNext()) {
-            var entry = fields.next();
-            JsonNode daily = entry.getValue();
-
-            bars.add(
-                    new MarketBar(
-                            LocalDate.parse(entry.getKey()),
-                            readDecimal(daily, "1. open"),
-                            readDecimal(daily, "2. high"),
-                            readDecimal(daily, "3. low"),
-                            readDecimal(daily, "4. close"),
-                            readVolume(daily, "5. volume")
-                    )
-            );
-        }
-
-        return bars;
-    }
-
+    /**
+     * Fetch daily NSE historical prices from TejHQ.
+     *
+     * Endpoint:
+     * GET /v1/ohlcv/nse/{symbol}?from=YYYY-MM-DD&to=YYYY-MM-DD
+     *
+     * This endpoint does not require an API key.
+     */
     private List<MarketBar> fetchTejHQ(String symbol)
             throws Exception {
 
-        if (!"RELIANCE".equals(symbol)) {
-            throw new IllegalArgumentException(
-                    "TejHQ supports only RELIANCE in this integration"
-            );
-        }
+        LocalDate to = LocalDate.now(INDIA_ZONE);
 
-        LocalDate to = LocalDate.now(ZoneId.of("Asia/Kolkata"));
-        LocalDate from = to.minusDays(365);
+        LocalDate from = to.minusDays(HISTORY_DAYS);
 
         String url = UriComponentsBuilder
                 .fromUriString(
-                        "https://api.tejhq.dev/v1/ohlcv/nse/RELIANCE"
+                        TEJHQ_BASE_URL + "/{exchange}/{symbol}"
                 )
                 .queryParam("from", from)
                 .queryParam("to", to)
-                .build()
+                .buildAndExpand(EXCHANGE, symbol)
                 .encode()
                 .toUriString();
 
-        String response = restTemplate.getForObject(
-                url,
-                String.class
+        System.out.println(
+                "TEJHQ REQUEST: " + EXCHANGE + "/" + symbol
         );
 
-        if (response == null || response.isBlank()) {
+        String response;
+
+        try {
+
+            response = restTemplate.getForObject(
+                    url,
+                    String.class
+            );
+
+        } catch (RestClientException exception) {
+
             throw new IllegalStateException(
-                    "TejHQ returned an empty response"
+                    "TejHQ HTTP request failed for " + symbol,
+                    exception
+            );
+        }
+
+        if (response == null || response.isBlank()) {
+
+            throw new IllegalStateException(
+                    "TejHQ returned an empty response for " + symbol
             );
         }
 
         JsonNode root = objectMapper.readTree(response);
+
+        if (root.has("error")) {
+
+            throw new IllegalStateException(
+                    "TejHQ API error: "
+                            + root.path("error").asText()
+            );
+        }
+
         JsonNode data = root.path("data");
 
-        if (root.has("error")
-                || !data.isArray()
-                || data.isEmpty()) {
+        if (!data.isArray()) {
+
             throw new IllegalStateException(
-                    "TejHQ returned no usable historical data"
+                    "Invalid TejHQ response: data is not an array"
+            );
+        }
+
+        if (data.isEmpty()) {
+
+            throw new IllegalStateException(
+                    "No historical data available for " + symbol
             );
         }
 
@@ -344,72 +298,63 @@ public class MarketDataService {
 
         for (JsonNode row : data) {
 
-            if (row.path("date").isMissingNode()
-                    || row.path("date").isNull()
-                    || row.path("date").asText().isBlank()) {
+            String dateText = row.path("date").asText("");
+
+            if (dateText.isBlank()) {
                 continue;
             }
 
+            LocalDate tradingDate;
+
+            try {
+
+                tradingDate = LocalDate.parse(dateText);
+
+            } catch (Exception exception) {
+
+                System.err.println(
+                        "Skipping invalid trading date: " + dateText
+                );
+
+                continue;
+            }
+
+            BigDecimal open = readDecimal(row, "open");
+            BigDecimal high = readDecimal(row, "high");
+            BigDecimal low = readDecimal(row, "low");
+            BigDecimal close = readDecimal(row, "close");
+
+            Long volume = readVolume(row, "volume");
+
             bars.add(
                     new MarketBar(
-                            LocalDate.parse(row.path("date").asText()),
-                            readDecimal(row, "open"),
-                            readDecimal(row, "high"),
-                            readDecimal(row, "low"),
-                            readDecimal(row, "close"),
-                            readVolume(row, "volume")
+                            tradingDate,
+                            open,
+                            high,
+                            low,
+                            close,
+                            volume
                     )
             );
         }
 
         if (bars.isEmpty()) {
+
             throw new IllegalStateException(
-                    "TejHQ returned no usable price records"
+                    "TejHQ returned no valid OHLCV records for " + symbol
             );
         }
 
         return bars;
     }
 
-    private synchronized String getRateLimitedResponse(String url)
-            throws InterruptedException {
-
-        // Keep at least 1.2 seconds between provider requests.
-        long waitMillis = 1200L
-                - (System.currentTimeMillis() - lastRequestTimeMillis);
-
-        if (waitMillis > 0) {
-            Thread.sleep(waitMillis);
-        }
-
-        lastRequestTimeMillis = System.currentTimeMillis();
-
-        return restTemplate.getForObject(url, String.class);
-    }
-
-    private String resolveAlphaVantageSymbol(String symbol) {
-
-        Map<String, String> symbols = Map.of(
-                "RELIANCE", relianceSymbol,
-                "TCS", tcsSymbol,
-                "INFY", infySymbol,
-                "HDFCBANK", hdfcSymbol
-        );
-
-        String providerSymbol = symbols.get(symbol);
-
-        if (providerSymbol == null || providerSymbol.isBlank()) {
-            throw new IllegalArgumentException(
-                    "Alpha Vantage symbol is not configured for " + symbol
-            );
-        }
-
-        return providerSymbol.trim();
-    }
-
+    /**
+     * Normalize stock symbols.
+     */
     private String normalizeSymbol(String symbol) {
 
         if (symbol == null || symbol.isBlank()) {
+
             throw new IllegalArgumentException(
                     "Stock symbol is required"
             );
@@ -418,54 +363,118 @@ public class MarketDataService {
         return symbol.trim().toUpperCase(Locale.ROOT);
     }
 
-    private BigDecimal readDecimal(JsonNode node, String fieldName) {
+    /**
+     * Company names used when creating new stock records.
+     */
+    private String getCompanyName(String symbol) {
+
+        return switch (symbol) {
+
+            case "RELIANCE" ->
+                    "Reliance Industries Limited";
+
+            case "TCS" ->
+                    "Tata Consultancy Services Limited";
+
+            case "INFY" ->
+                    "Infosys Limited";
+
+            case "HDFCBANK" ->
+                    "HDFC Bank Limited";
+
+            default ->
+                    symbol;
+        };
+    }
+
+    /**
+     * Safely read decimal values from the JSON response.
+     */
+    private BigDecimal readDecimal(
+            JsonNode node,
+            String fieldName
+    ) {
 
         JsonNode value = node.get(fieldName);
 
         if (value == null
                 || value.isNull()
-                || value.asText().isBlank()
-                || (!value.isNumber() && !value.isTextual())) {
+                || !value.isValueNode()
+                || value.asText().isBlank()) {
 
             throw new IllegalStateException(
-                    "Missing or invalid market-data field: " + fieldName
+                    "Missing or invalid market-data field: "
+                            + fieldName
             );
         }
 
-        return new BigDecimal(value.asText());
+        try {
+
+            return new BigDecimal(value.asText());
+
+        } catch (NumberFormatException exception) {
+
+            throw new IllegalStateException(
+                    "Invalid decimal value for field: " + fieldName,
+                    exception
+            );
+        }
     }
 
-    private Long readVolume(JsonNode node, String fieldName) {
+    /**
+     * Safely read trading volume.
+     */
+    private Long readVolume(
+            JsonNode node,
+            String fieldName
+    ) {
 
         JsonNode value = node.get(fieldName);
 
         if (value == null
                 || value.isNull()
-                || !value.canConvertToLong()) {
+                || !value.isValueNode()
+                || value.asText().isBlank()) {
 
             throw new IllegalStateException(
-                    "Missing or invalid market-data field: " + fieldName
+                    "Missing or invalid market-data field: "
+                            + fieldName
             );
         }
 
-        return value.asLong();
+        try {
+
+            return Long.parseLong(value.asText());
+
+        } catch (NumberFormatException exception) {
+
+            throw new IllegalStateException(
+                    "Invalid volume value",
+                    exception
+            );
+        }
     }
 
+    /**
+     * Prevent sensitive information from being exposed in logs.
+     */
     private String safeErrorMessage(Exception exception) {
 
         String message = exception.getMessage();
 
-        if (message == null) {
-            message = "No additional details";
+        if (message == null || message.isBlank()) {
+            return "No additional details";
         }
 
-        // Redact API key if it appears in an exception message.
         return message.replaceAll(
                 "(?i)(apikey=)[^&\\s]+",
                 "$1[REDACTED]"
         );
     }
 
+    /**
+     * Internal market-data representation.
+     */
     private record MarketBar(
             LocalDate date,
             BigDecimal open,
