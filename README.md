@@ -2,7 +2,7 @@
 
 FinAI is a full-stack financial analysis platform built with **Java, Spring Boot, React, and AI integration**. It combines market data, technical indicators, trading-strategy analysis, and AI-assisted financial insights in one application.
 
-> **Project status:** Development in progress. Deployment and end-to-end verification are pending.
+> **Live Link:** https://finai-financial-analysis-platform.vercel.app/ 
 
 ## Features
 
