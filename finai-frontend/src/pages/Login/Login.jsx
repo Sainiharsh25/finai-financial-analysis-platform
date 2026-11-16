@@ -126,7 +126,7 @@ function Login() {
           </p>
 
           <h2 className="mt-2 text-3xl font-bold">
-            Sign in to FinAI
+            Sign in to Fin<span className="text-blue-500">AI</span>
           </h2>
 
           <p className="mt-3 text-sm leading-6 text-slate-400">
