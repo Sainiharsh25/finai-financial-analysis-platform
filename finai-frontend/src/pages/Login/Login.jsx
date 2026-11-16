@@ -57,9 +57,9 @@ function Login() {
 
       setError(
         err.response?.data?.message ||
-          (typeof err.response?.data === "string"
-            ? err.response.data
-            : "Invalid email or password. Please try again.")
+        (typeof err.response?.data === "string"
+          ? err.response.data
+          : "Invalid email or password. Please try again.")
       );
     } finally {
       setLoading(false);
@@ -81,7 +81,7 @@ function Login() {
             </div>
 
             <span className="text-2xl font-bold tracking-tight">
-              FinAI
+              Fin<span className="text-blue-500">AI</span>
             </span>
           </Link>
 
@@ -116,7 +116,9 @@ function Login() {
               <TrendingUp size={22} />
             </div>
 
-            <span className="text-xl font-bold">FinAI</span>
+            <span className="text-xl font-bold">
+              Fin<span className="text-blue-500">AI</span>
+            </span>
           </Link>
 
           <p className="text-sm font-semibold text-cyan-400">

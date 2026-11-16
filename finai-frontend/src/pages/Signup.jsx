@@ -119,7 +119,7 @@ function Signup() {
         state: {
           message:
             typeof response.data === "string" &&
-            response.data.trim()
+              response.data.trim()
               ? `${response.data} You can now log in.`
               : "Account created successfully! You can now log in.",
         },
@@ -149,7 +149,9 @@ function Signup() {
             <div className="rounded-xl bg-cyan-400 p-2.5 text-slate-950">
               <TrendingUp size={25} />
             </div>
-            <span className="text-2xl font-bold">FinAI</span>
+            <span className="text-2xl font-bold">
+              Fin<span className="text-blue-500">AI</span>
+            </span>
           </Link>
 
           <div>
@@ -180,7 +182,9 @@ function Signup() {
             className="mb-8 inline-flex items-center gap-3 md:hidden"
           >
             <TrendingUp className="text-cyan-400" size={25} />
-            <span className="text-xl font-bold">FinAI</span>
+            <span className="text-2xl font-bold">
+              Fin<span className="text-blue-500">AI</span>
+            </span>
           </Link>
 
           <p className="text-sm font-semibold text-cyan-400">
