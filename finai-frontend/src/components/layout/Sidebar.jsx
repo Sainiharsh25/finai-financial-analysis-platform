@@ -41,7 +41,9 @@ function Sidebar() {
     <>
       <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col border-r border-slate-800 bg-slate-950 text-white">
         <div className="shrink-0 border-b border-slate-800 px-6 py-5">
-          <h1 className="text-2xl font-bold">FinAI</h1>
+          <h1 className="text-2xl font-bold">
+            Fin<span className="text-blue-500">AI</span>
+          </h1>
           <p className="mt-1 text-xs text-slate-400">
             Financial Intelligence
           </p>
@@ -61,10 +63,9 @@ function Sidebar() {
                   key={item.label}
                   to={item.path}
                   className={({ isActive }) =>
-                    `flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm transition ${
-                      isActive
-                        ? 'bg-slate-800 text-white'
-                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                    `flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm transition ${isActive
+                      ? 'bg-slate-800 text-white'
+                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                     }`
                   }
                 >

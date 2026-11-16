@@ -122,7 +122,9 @@ function LandingPage() {
             <div className="rounded-xl bg-cyan-400 p-2.5 text-slate-950">
               <TrendingUp size={23} />
             </div>
-            <span className="text-2xl font-bold tracking-tight">FinAI</span>
+            <span className="text-2xl font-bold tracking-tight">
+              Fin<span className="text-blue-500">AI</span>
+            </span>
           </Link>
 
           <div className={`hidden items-center gap-9 text-sm md:flex ${theme.navText}`}>
@@ -417,65 +419,65 @@ function LandingPage() {
       </main>
 
       <footer className={`border-t ${theme.border} ${theme.background}`}>
-  <div className="max-w-7xl mx-auto px-6 py-12">
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
+        <div className="max-w-7xl mx-auto px-6 py-12">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
 
-      {/* Brand */}
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">
-          Fin<span className="text-blue-500">AI</span>
-        </h2>
-        <p className={`mt-4 text-sm leading-6 ${theme.textSecondary}`}>
-          AI-powered financial insights and portfolio analysis.
-          Make smarter investment decisions with confidence.
-        </p>
-      </div>
+            {/* Brand */}
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight">
+                Fin<span className="text-blue-500">AI</span>
+              </h2>
+              <p className={`mt-4 text-sm leading-6 ${theme.textSecondary}`}>
+                AI-powered financial insights and portfolio analysis.
+                Make smarter investment decisions with confidence.
+              </p>
+            </div>
 
-      {/* Products */}
-      <div>
-        <h3 className="font-semibold mb-4">Products</h3>
-        <ul className={`space-y-3 text-sm ${theme.textSecondary}`}>
-          <li><a href="/dashboard" className="hover:text-blue-500">Dashboard</a></li>
-          <li><a href="/analysis" className="hover:text-blue-500">Market Analysis</a></li>
-          <li><a href="/strategies" className="hover:text-blue-500">Trading Strategies</a></li>
-          <li><a href="/backtesting" className="hover:text-blue-500">Backtesting</a></li>
-        </ul>
-      </div>
+            {/* Products */}
+            <div>
+              <h3 className="font-semibold mb-4">Products</h3>
+              <ul className={`space-y-3 text-sm ${theme.textSecondary}`}>
+                <li><a href="/dashboard" className="hover:text-blue-500">Dashboard</a></li>
+                <li><a href="/analysis" className="hover:text-blue-500">Market Analysis</a></li>
+                <li><a href="/strategies" className="hover:text-blue-500">Trading Strategies</a></li>
+                <li><a href="/backtesting" className="hover:text-blue-500">Backtesting</a></li>
+              </ul>
+            </div>
 
-      {/* Help & Info */}
-      <div>
-        <h3 className="font-semibold mb-4">Help & Info</h3>
-        <ul className={`space-y-3 text-sm ${theme.textSecondary}`}>
-          <li><a href="/learning" className="hover:text-blue-500">Learning Center</a></li>
-          <li><a href="/portfolio" className="hover:text-blue-500">Portfolio Guide</a></li>
-          <li><a href="/watchlist" className="hover:text-blue-500">Watchlist</a></li>
-        </ul>
-      </div>
+            {/* Help & Info */}
+            <div>
+              <h3 className="font-semibold mb-4">Help & Info</h3>
+              <ul className={`space-y-3 text-sm ${theme.textSecondary}`}>
+                <li><a href="/learning" className="hover:text-blue-500">Learning Center</a></li>
+                <li><a href="/portfolio" className="hover:text-blue-500">Portfolio Guide</a></li>
+                <li><a href="/watchlist" className="hover:text-blue-500">Watchlist</a></li>
+              </ul>
+            </div>
 
-      {/* Features */}
-      <div>
-        <h3 className="font-semibold mb-4">Features</h3>
-        <ul className={`space-y-3 text-sm ${theme.textSecondary}`}>
-          <li>AI-powered Market Insights</li>
-          <li>Technical Indicators</li>
-          <li>Portfolio Tracking</li>
-          <li>Strategy Backtesting</li>
-        </ul>
-      </div>
-    </div>
+            {/* Features */}
+            <div>
+              <h3 className="font-semibold mb-4">Features</h3>
+              <ul className={`space-y-3 text-sm ${theme.textSecondary}`}>
+                <li>AI-powered Market Insights</li>
+                <li>Technical Indicators</li>
+                <li>Portfolio Tracking</li>
+                <li>Strategy Backtesting</li>
+              </ul>
+            </div>
+          </div>
 
-    <div className={`mt-10 pt-6 border-t ${theme.border}
+          <div className={`mt-10 pt-6 border-t ${theme.border}
                     flex flex-col sm:flex-row justify-between gap-4
                     text-sm ${theme.textSecondary}`}>
-      <p>© {new Date().getFullYear()} FinAI. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} FinAI. All rights reserved.</p>
 
-      <div className="flex gap-6">
-        <a href="#" className="hover:text-blue-500">Privacy Policy</a>
-        <a href="#" className="hover:text-blue-500">Terms of Service</a>
-      </div>
-    </div>
-  </div>
-</footer>
+            <div className="flex gap-6">
+              <a href="#" className="hover:text-blue-500">Privacy Policy</a>
+              <a href="#" className="hover:text-blue-500">Terms of Service</a>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }
