@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -27,34 +27,16 @@ const menuItems = [
   { label: 'Settings', icon: Settings, path: '/settings' },
 ]
 
-function Sidebar() {
-  const navigate = useNavigate()
-
-  const [showLogoutModal, setShowLogoutModal] = useState(false)
-  const [isMobileOpen, setIsMobileOpen] = useState(false)
-
-  const handleLogout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-
-    setShowLogoutModal(false)
-    setIsMobileOpen(false)
-
-    navigate('/', { replace: true })
-  }
-
-  const closeMobileMenu = () => {
-    setIsMobileOpen(false)
-  }
-
-  const SidebarContent = ({ mobile = false }) => (
+function SidebarContent({ mobile = false, onClose, onLogout }) {
+  return (
     <>
       {/* Logo */}
-      <div className="flex shrink-0 items-center justify-between border-b border-slate-800 px-6 py-5">
+      <div className="flex shrink-0 items-center justify-between border-b border-slate-800 px-5 py-5 sm:px-6">
         <div>
-          <h1 className="text-2xl font-bold">
+          <h1 className="text-2xl font-bold tracking-tight">
             Fin<span className="text-blue-500">AI</span>
           </h1>
+
           <p className="mt-1 text-xs text-slate-400">
             Financial Intelligence
           </p>
@@ -63,17 +45,23 @@ function Sidebar() {
         {mobile && (
           <button
             type="button"
-            onClick={closeMobileMenu}
+            onClick={onClose}
             aria-label="Close navigation menu"
-            className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white"
+            className="
+              inline-flex min-h-11 min-w-11 items-center justify-center
+              rounded-lg text-slate-400 transition
+              hover:bg-slate-800 hover:text-white
+              focus-visible:outline-none focus-visible:ring-2
+              focus-visible:ring-blue-500
+            "
           >
-            <X size={22} />
+            <X size={21} />
           </button>
         )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 py-5">
+      <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-5">
         <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
           Menu
         </p>
@@ -84,19 +72,26 @@ function Sidebar() {
 
             return (
               <NavLink
-                key={item.label}
+                key={item.path}
                 to={item.path}
-                onClick={closeMobileMenu}
+                onClick={onClose}
                 className={({ isActive }) =>
-                  `flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm transition ${
-                    isActive
-                      ? 'bg-slate-800 text-white'
-                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                  }`
+                  `
+                    flex min-h-11 w-full items-center gap-3
+                    rounded-lg px-3 py-3 text-sm font-medium
+                    transition-colors duration-150
+                    focus-visible:outline-none focus-visible:ring-2
+                    focus-visible:ring-blue-500
+                    ${
+                      isActive
+                        ? 'bg-slate-800 text-white'
+                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                    }
+                  `
                 }
               >
                 <Icon size={19} className="shrink-0" />
-                <span>{item.label}</span>
+                <span className="truncate">{item.label}</span>
               </NavLink>
             )
           })}
@@ -108,11 +103,15 @@ function Sidebar() {
         <div className="px-3 py-3">
           <button
             type="button"
-            onClick={() => {
-              setShowLogoutModal(true)
-              setIsMobileOpen(false)
-            }}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm text-slate-300 transition hover:bg-red-900/30 hover:text-red-400"
+            onClick={onLogout}
+            className="
+              flex min-h-11 w-full items-center gap-3
+              rounded-lg px-3 py-3 text-sm font-medium
+              text-slate-300 transition-colors
+              hover:bg-red-900/30 hover:text-red-400
+              focus-visible:outline-none focus-visible:ring-2
+              focus-visible:ring-red-500
+            "
           >
             <LogOut size={19} className="shrink-0" />
             <span>Logout</span>
@@ -120,54 +119,138 @@ function Sidebar() {
         </div>
 
         <div className="border-t border-slate-800 p-4">
-          <div className="rounded-lg bg-slate-900 p-3">
-            <p className="text-sm font-medium">AI Assistant</p>
-            <p className="mt-1 text-xs leading-relaxed text-slate-400">
-              Analyze your market data with AI
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-3">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                <TrendingUp size={16} className="text-blue-400" />
+              </div>
+
+              <p className="text-sm font-semibold text-white">
+                AI Assistant
+              </p>
+            </div>
+
+            <p className="mt-2 text-xs leading-relaxed text-slate-400">
+              Analyze your market data with AI.
             </p>
           </div>
         </div>
       </div>
     </>
   )
+}
+
+function Sidebar() {
+  const navigate = useNavigate()
+
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
+
+  const closeMobileMenu = () => {
+    setIsMobileOpen(false)
+  }
+
+  const handleLogoutClick = () => {
+    setIsMobileOpen(false)
+    setShowLogoutModal(true)
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+
+    setShowLogoutModal(false)
+    setIsMobileOpen(false)
+
+    navigate('/', { replace: true })
+  }
+
+  // Close the mobile menu with Escape and prevent background scrolling.
+  useEffect(() => {
+    if (!isMobileOpen) return
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        closeMobileMenu()
+      }
+    }
+
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = ''
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isMobileOpen])
 
   return (
     <>
-      {/* Desktop Sidebar */}
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-slate-800 bg-slate-950 text-white lg:flex">
-        <SidebarContent />
+      {/* Desktop sidebar */}
+      <aside
+        aria-label="Main navigation"
+        className="
+          sticky top-0 hidden h-screen w-64 shrink-0
+          flex-col border-r border-slate-800
+          bg-slate-950 text-white lg:flex
+        "
+      >
+        <SidebarContent
+          onClose={closeMobileMenu}
+          onLogout={handleLogoutClick}
+        />
       </aside>
 
-      {/* Mobile Menu Button */}
+      {/* Mobile menu button */}
       <button
         type="button"
         onClick={() => setIsMobileOpen(true)}
         aria-label="Open navigation menu"
+        aria-controls="mobile-sidebar"
         aria-expanded={isMobileOpen}
-        className="fixed left-4 top-4 z-40 flex h-11 w-11 items-center justify-center rounded-xl border border-slate-700 bg-slate-950 text-white shadow-lg transition hover:bg-slate-800 lg:hidden"
+        className="
+          fixed left-4 top-4 z-40
+          flex h-11 w-11 items-center justify-center
+          rounded-xl border border-slate-700
+          bg-slate-950 text-white shadow-lg
+          transition hover:bg-slate-800
+          focus-visible:outline-none focus-visible:ring-2
+          focus-visible:ring-blue-500
+          lg:hidden
+        "
       >
         <Menu size={22} />
       </button>
 
-      {/* Mobile Overlay */}
+      {/* Mobile overlay and drawer */}
       {isMobileOpen && (
         <div
-          className="fixed inset-0 z-50 bg-black/60 lg:hidden"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] lg:hidden"
           onClick={closeMobileMenu}
         >
           <aside
+            id="mobile-sidebar"
             role="dialog"
             aria-modal="true"
             aria-label="Navigation menu"
             onClick={(event) => event.stopPropagation()}
-            className="flex h-full w-[min(280px,85vw)] flex-col border-r border-slate-800 bg-slate-950 text-white shadow-2xl"
+            className="
+              flex h-dvh w-[min(18rem,85vw)] flex-col
+              border-r border-slate-800 bg-slate-950
+              text-white shadow-2xl
+              animate-in slide-in-from-left duration-200
+            "
           >
-            <SidebarContent mobile />
+            <SidebarContent
+              mobile
+              onClose={closeMobileMenu}
+              onLogout={handleLogoutClick}
+            />
           </aside>
         </div>
       )}
 
-      {/* Logout Confirmation */}
+      {/* Logout confirmation */}
       <ConfirmModal
         isOpen={showLogoutModal}
         onCancel={() => setShowLogoutModal(false)}
