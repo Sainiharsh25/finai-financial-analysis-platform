@@ -1,17 +1,37 @@
+
 @import "tailwindcss";
 
-/* ===== FinAI global theme ===== */
+/* =========================================
+   FinAI Global Theme
+========================================= */
 
 html {
   color-scheme: light;
+  scroll-behavior: smooth;
 }
 
 html.dark {
   color-scheme: dark;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+
 body {
   min-height: 100vh;
+  overflow-x: hidden;
   background-color: #f1f5f9;
   color: #0f172a;
   transition: background-color 200ms ease, color 200ms ease;
@@ -22,7 +42,39 @@ html.dark body {
   color: #e2e8f0;
 }
 
-/* ===== Dark mode: common surfaces ===== */
+/* =========================================
+   Responsive Foundation
+========================================= */
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+input,
+select,
+textarea,
+button {
+  max-width: 100%;
+}
+
+main,
+section,
+article,
+aside {
+  min-width: 0;
+}
+
+button,
+a {
+  touch-action: manipulation;
+}
+
+/* =========================================
+   Dark Mode: Common Surfaces
+========================================= */
 
 html.dark .bg-white,
 html.dark [class~="bg-slate-50"],
@@ -39,7 +91,9 @@ html.dark [class~="bg-gray-200"] {
   background-color: #1e293b;
 }
 
-/* ===== Text colors ===== */
+/* =========================================
+   Text Colors
+========================================= */
 
 html.dark [class~="text-slate-900"],
 html.dark [class~="text-slate-800"],
@@ -60,7 +114,9 @@ html.dark [class~="text-gray-500"] {
   color: #94a3b8;
 }
 
-/* ===== Borders and separators ===== */
+/* =========================================
+   Borders and Separators
+========================================= */
 
 html.dark [class~="border-slate-100"],
 html.dark [class~="border-slate-200"],
@@ -70,9 +126,12 @@ html.dark [class~="border-gray-300"] {
   border-color: #334155;
 }
 
-/* ===== Clear, readable hover states ===== */
+/* =========================================
+   Hover States
+========================================= */
 
 /* Cards and panels */
+
 html.dark .bg-white:hover,
 html.dark [class~="bg-slate-50"]:hover,
 html.dark [class~="bg-slate-100"]:hover,
@@ -82,14 +141,18 @@ html.dark [class~="bg-gray-100"]:hover {
 }
 
 /* Buttons and clickable elements */
+
 html.dark button:hover,
 html.dark a:hover,
 html.dark [role="button"]:hover {
-  transition: background-color 150ms ease, color 150ms ease,
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
     border-color 150ms ease;
 }
 
-/* Keep primary-colored buttons readable */
+/* Primary-colored buttons */
+
 html.dark button[class*="bg-blue-"]:hover,
 html.dark a[class*="bg-blue-"]:hover,
 html.dark button[class*="bg-indigo-"]:hover,
@@ -97,17 +160,32 @@ html.dark a[class*="bg-indigo-"]:hover {
   filter: brightness(1.12);
 }
 
-/* Keyboard focus visibility */
+/* =========================================
+   Keyboard Focus Visibility
+========================================= */
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Dark mode focus */
+
 html.dark button:focus-visible,
 html.dark a:focus-visible,
 html.dark input:focus-visible,
 html.dark select:focus-visible,
 html.dark textarea:focus-visible {
-  outline: 2px solid #60a5fa;
-  outline-offset: 2px;
+  outline-color: #60a5fa;
 }
 
-/* ===== Form controls ===== */
+/* =========================================
+   Form Controls
+========================================= */
 
 html.dark input:not([type="checkbox"]):not([type="radio"]),
 html.dark select,
@@ -122,7 +200,9 @@ html.dark textarea::placeholder {
   color: #94a3b8;
 }
 
-/* ===== Tables ===== */
+/* =========================================
+   Tables
+========================================= */
 
 html.dark table thead {
   background-color: #0f172a;
@@ -136,10 +216,122 @@ html.dark table tbody tr:hover {
   background-color: #1e293b;
 }
 
-/* ===== Reduced motion ===== */
+/* Responsive table wrapper
+   Wrap tables with .table-container in JSX.
+*/
+
+.table-container {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-container table {
+  width: 100%;
+  min-width: 600px;
+  border-collapse: collapse;
+}
+
+/* =========================================
+   Responsive Charts
+========================================= */
+
+.chart-container {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chart-container canvas,
+.chart-container svg {
+  max-width: 100%;
+}
+
+/* =========================================
+   Mobile Devices: 320px - 639px
+========================================= */
+
+@media (max-width: 639px) {
+  html,
+  body {
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  main {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Prevent long text from breaking layouts */
+
+  main h1,
+  main h2,
+  main h3,
+  main p,
+  main span {
+    overflow-wrap: anywhere;
+  }
+
+  /* Mobile form controls */
+
+  main input,
+  main select,
+  main textarea {
+    min-width: 0;
+    font-size: 16px;
+  }
+
+  /* Keep tables scrollable */
+
+  .table-container table {
+    min-width: 600px;
+  }
+
+  /* Improve mobile chart sizing */
+
+  .chart-container {
+    min-height: 200px;
+  }
+}
+
+/* =========================================
+   Tablets: 640px - 1023px
+========================================= */
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  main {
+    min-width: 0;
+  }
+
+  .chart-container {
+    min-height: 250px;
+  }
+}
+
+/* =========================================
+   Laptops and Desktops: 1024px+
+========================================= */
+
+@media (min-width: 1024px) {
+  main {
+    min-width: 0;
+  }
+}
+
+/* =========================================
+   Reduced Motion Accessibility
+========================================= */
 
 @media (prefers-reduced-motion: reduce) {
-  body {
-    transition: none;
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

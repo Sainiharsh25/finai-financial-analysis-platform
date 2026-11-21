@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+
 import {
   UserRound,
   SlidersHorizontal,
@@ -16,6 +17,28 @@ import api from '../../services/api'
 import { usePreferences } from '../../hooks/PreferencesContext'
 import Navbar from '../../pages/Navbar/Navbar'
 
+// Reusable preference toggle
+function Toggle({ checked, onChange, label }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={onChange}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 ${
+        checked ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-600'
+      }`}
+    >
+      <span
+        className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+          checked ? 'translate-x-6' : 'translate-x-1'
+        }`}
+      />
+    </button>
+  )
+}
+
 function Settings() {
   const { preferences, updatePreference, resetPreferences } =
     usePreferences()
@@ -31,6 +54,7 @@ function Settings() {
   const [username, setUsername] = useState(
     user.username || user.name || user.email?.split('@')[0] || ''
   )
+
   const [email, setEmail] = useState(user.email || '')
 
   const [message, setMessage] = useState('')
@@ -45,61 +69,74 @@ function Settings() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
-  // --------------------------------------------------
   // Load account and check backend
-  // --------------------------------------------------
-
   useEffect(() => {
     let active = true
 
-    api
-      .get('/api/auth/me')
-      .then((response) => {
+    const loadAccount = async () => {
+      try {
+        const response = await api.get('/api/auth/me')
+
         if (!active) return
 
         const account = response.data || {}
-        const mergedUser = { ...user, ...account }
+
+        let storedUser = {}
+
+        try {
+          storedUser = JSON.parse(localStorage.getItem('user') || '{}')
+        } catch {
+          storedUser = {}
+        }
+
+        const mergedUser = {
+          ...storedUser,
+          ...account,
+        }
 
         setUser(mergedUser)
+
         setUsername(
           mergedUser.username ||
             mergedUser.name ||
             mergedUser.email?.split('@')[0] ||
             ''
         )
+
         setEmail(mergedUser.email || '')
+
         localStorage.setItem('user', JSON.stringify(mergedUser))
+
         setBackendStatus('Connected')
-      })
-      .catch(() => {
-        api
-          .get('/actuator/health')
-          .then(() => {
-            if (active) setBackendStatus('Connected')
-          })
-          .catch(() => {
-            if (active) setBackendStatus('Unable to verify')
-          })
-      })
+      } catch {
+        try {
+          await api.get('/actuator/health')
+
+          if (active) {
+            setBackendStatus('Connected')
+          }
+        } catch {
+          if (active) {
+            setBackendStatus('Unable to verify')
+          }
+        }
+      }
+    }
+
+    loadAccount()
 
     return () => {
       active = false
     }
   }, [])
 
-  // --------------------------------------------------
   // Helpers
-  // --------------------------------------------------
-
   const showMessage = (text, type = 'success') => {
     setMessage(text)
     setMessageType(type)
   }
 
-  // --------------------------------------------------
   // Preferences
-  // --------------------------------------------------
-
   const handlePreferenceToggle = (key) => {
     updatePreference(key, !preferences[key])
     setMessage('')
@@ -110,10 +147,7 @@ function Settings() {
     showMessage('Preferences restored to defaults.')
   }
 
-  // --------------------------------------------------
   // Profile
-  // --------------------------------------------------
-
   const handleProfileUpdate = (event) => {
     event.preventDefault()
     setMessage('')
@@ -140,10 +174,7 @@ function Settings() {
     )
   }
 
-  // --------------------------------------------------
   // Change password
-  // --------------------------------------------------
-
   const handlePasswordChange = async (event) => {
     event.preventDefault()
     setMessage('')
@@ -196,49 +227,26 @@ function Settings() {
     }
   }
 
-  // --------------------------------------------------
-  // Reusable toggle
-  // --------------------------------------------------
-
-  const Toggle = ({ checked, onChange, label }) => (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={onChange}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 ${
-        checked ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-600'
-      }`}
-    >
-      <span
-        className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
-          checked ? 'translate-x-6' : 'translate-x-1'
-        }`}
-      />
-    </button>
-  )
-
+  // Styling
   const cardClass =
-    'rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900'
+    'min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6'
 
   const labelClass =
     'mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300'
 
   const inputClass =
-    'w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:focus:ring-teal-900'
+    'w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-3 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500 dark:focus:ring-teal-900'
 
-  // --------------------------------------------------
+  const passwordButtonClass =
+    'absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-500 transition hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:text-slate-400 dark:hover:text-white'
+
   // UI
-  // --------------------------------------------------
-
   return (
-    <div className="min-h-full bg-slate-50 p-4 dark:bg-slate-950 sm:p-6">
+    <div className="min-h-full min-w-0 bg-slate-50 p-3 dark:bg-slate-950 sm:p-5 lg:p-6">
       {/* Header */}
-      <div className="-mx-4 -mt-4 mb-6 border-b border-slate-200 bg-white px-4 py-5 dark:border-slate-800 dark:bg-slate-900 sm:-mx-6 sm:-mt-6 sm:px-6 sm:py-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          {/* Page title */}
-          <div>
+      <div className="-mx-3 -mt-3 mb-5 border-b border-slate-200 bg-white px-3 py-4 dark:border-slate-800 dark:bg-slate-900 sm:-mx-5 sm:-mt-5 sm:mb-6 sm:px-5 sm:py-5 lg:-mx-6 lg:-mt-6 lg:px-6">
+        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl">
               Settings
             </h1>
@@ -248,28 +256,29 @@ function Settings() {
             </p>
           </div>
 
-          {/* Right-side actions */}
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
             <button
               type="button"
               onClick={handleResetPreferences}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 sm:flex-none sm:px-4"
             >
               <RotateCcw size={16} />
               Reset preferences
             </button>
 
-            <Navbar />
+            <div className="ml-auto sm:ml-0">
+              <Navbar />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Status message */}
+      {/* Status Message */}
       {message && (
         <div
           role="status"
           aria-live="polite"
-          className={`mb-6 flex items-start gap-3 rounded-xl border p-4 text-sm ${
+          className={`mb-5 flex items-start gap-3 rounded-xl border p-3 text-sm sm:mb-6 sm:p-4 ${
             messageType === 'error'
               ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300'
               : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
@@ -281,23 +290,24 @@ function Settings() {
             <CheckCircle2 size={19} className="mt-0.5 shrink-0" />
           )}
 
-          <span>{message}</span>
+          <span className="min-w-0 break-words">{message}</span>
         </div>
       )}
 
-      {/* Settings sections */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* Settings Sections */}
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
         {/* Account */}
         <section className={cardClass}>
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-teal-50 p-2.5 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">
+            <div className="shrink-0 rounded-lg bg-teal-50 p-2.5 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">
               <UserRound size={21} />
             </div>
 
-            <div>
+            <div className="min-w-0">
               <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
                 Account
               </h2>
+
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 Your account information
               </p>
@@ -309,6 +319,7 @@ function Settings() {
               <label htmlFor="settings-username" className={labelClass}>
                 Username
               </label>
+
               <input
                 id="settings-username"
                 type="text"
@@ -325,6 +336,7 @@ function Settings() {
               <label htmlFor="settings-email" className={labelClass}>
                 Email
               </label>
+
               <input
                 id="settings-email"
                 type="email"
@@ -338,7 +350,7 @@ function Settings() {
 
             <button
               type="submit"
-              className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 dark:bg-teal-600 dark:hover:bg-teal-500"
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 dark:bg-teal-600 dark:hover:bg-teal-500 sm:w-auto"
             >
               Save Profile
             </button>
@@ -352,21 +364,22 @@ function Settings() {
         {/* Preferences */}
         <section className={cardClass}>
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-violet-50 p-2.5 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+            <div className="shrink-0 rounded-lg bg-violet-50 p-2.5 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
               <SlidersHorizontal size={21} />
             </div>
 
-            <div>
+            <div className="min-w-0">
               <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
                 Preferences
               </h2>
+
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 Customize your dashboard experience
               </p>
             </div>
           </div>
 
-          <div className="mt-6 space-y-6">
+          <div className="mt-6 space-y-5 sm:space-y-6">
             {[
               {
                 key: 'aiExplanations',
@@ -388,12 +401,12 @@ function Settings() {
                 key={item.key}
                 className="flex items-center justify-between gap-4"
               >
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm font-medium text-slate-900 dark:text-white">
                     {item.title}
                   </p>
 
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
                     {item.description}
                   </p>
 
@@ -411,7 +424,7 @@ function Settings() {
             ))}
 
             <p className="border-t border-slate-100 pt-4 text-xs leading-5 text-slate-500 dark:border-slate-700 dark:text-slate-400">
-              Settings are saved automatically on this device. The AI
+              Settings are saved automatically on this device. AI
               explanation and notification preferences affect those features
               only after they are connected to their display logic.
             </p>
@@ -421,14 +434,15 @@ function Settings() {
         {/* Security */}
         <section className={cardClass}>
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-amber-50 p-2.5 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+            <div className="shrink-0 rounded-lg bg-amber-50 p-2.5 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
               <ShieldCheck size={21} />
             </div>
 
-            <div>
+            <div className="min-w-0">
               <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
                 Security
               </h2>
+
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 Manage your account security
               </p>
@@ -462,7 +476,7 @@ function Settings() {
                   onClick={() =>
                     setShowCurrentPassword((value) => !value)
                   }
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                  className={passwordButtonClass}
                 >
                   {showCurrentPassword ? (
                     <EyeOff size={18} />
@@ -498,7 +512,7 @@ function Settings() {
                       : 'Show new password'
                   }
                   onClick={() => setShowNewPassword((value) => !value)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                  className={passwordButtonClass}
                 >
                   {showNewPassword ? (
                     <EyeOff size={18} />
@@ -529,7 +543,7 @@ function Settings() {
             <button
               type="submit"
               disabled={savingPassword}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto"
             >
               {savingPassword && (
                 <LoaderCircle size={16} className="animate-spin" />
@@ -543,14 +557,15 @@ function Settings() {
         {/* Application */}
         <section className={cardClass}>
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-sky-50 p-2.5 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+            <div className="shrink-0 rounded-lg bg-sky-50 p-2.5 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
               <Info size={21} />
             </div>
 
-            <div>
+            <div className="min-w-0">
               <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
                 Application
               </h2>
+
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 FinAI application information
               </p>
@@ -562,6 +577,7 @@ function Settings() {
               <span className="text-slate-500 dark:text-slate-400">
                 Version
               </span>
+
               <span className="font-medium text-slate-900 dark:text-white">
                 1.0.0
               </span>
@@ -573,7 +589,7 @@ function Settings() {
               </span>
 
               <span
-                className={`font-medium ${
+                className={`text-right font-medium ${
                   backendStatus === 'Connected'
                     ? 'text-emerald-600 dark:text-emerald-400'
                     : backendStatus === 'Checking...'
@@ -589,6 +605,7 @@ function Settings() {
               <span className="text-slate-500 dark:text-slate-400">
                 AI Engine
               </span>
+
               <span className="text-right font-medium text-slate-900 dark:text-white">
                 Ollama / Llama 3.2
               </span>

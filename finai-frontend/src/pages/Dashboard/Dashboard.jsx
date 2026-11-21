@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useState } from 'react'
 import {
   TrendingUp,
@@ -10,8 +9,6 @@ import {
   Star,
   RefreshCw,
   AlertCircle,
-  Moon,
-  Sun,
 } from 'lucide-react'
 import {
   LineChart,
@@ -23,6 +20,7 @@ import {
   CartesianGrid,
 } from 'recharts'
 import { useNavigate } from 'react-router-dom'
+
 import api from '../../services/api'
 import Navbar from '../../pages/Navbar/Navbar'
 import { usePreferences } from '../../hooks/PreferencesContext'
@@ -37,6 +35,7 @@ const formatCurrency = (value) =>
 
 const formatPercent = (value) => {
   if (value == null || !Number.isFinite(Number(value))) return '—'
+
   const number = Number(value)
   return `${number > 0 ? '+' : ''}${number.toFixed(2)}%`
 }
@@ -84,6 +83,7 @@ const toDateInputValue = (date) => {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
+
   return `${year}-${month}-${day}`
 }
 
@@ -108,7 +108,7 @@ const formatSnapshotDate = (value) => {
 
 function Dashboard() {
   const navigate = useNavigate()
-  const { preferences, toggleDarkMode } = usePreferences()
+  const { preferences } = usePreferences()
   const isDark = preferences.darkMode
 
   const [portfolio, setPortfolio] = useState(null)
@@ -342,15 +342,19 @@ function Dashboard() {
   const muted = isDark ? 'text-slate-400' : 'text-slate-500'
   const heading = isDark ? 'text-white' : 'text-slate-900'
   const panel = isDark ? 'bg-slate-800/70' : 'bg-slate-50'
+
   const input = isDark
     ? 'border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:ring-slate-700'
     : 'border-slate-300 bg-slate-50 text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:ring-slate-200'
+
   const button = isDark
     ? 'border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800'
     : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+
   const separator = isDark ? 'border-slate-800' : 'border-slate-100'
   const chartGrid = isDark ? '#334155' : '#e2e8f0'
   const chartAxis = isDark ? '#94a3b8' : '#64748b'
+
   const chartTooltip = isDark
     ? {
         backgroundColor: '#0f172a',
@@ -370,8 +374,10 @@ function Dashboard() {
   return (
     <div
       data-theme={isDark ? 'dark' : 'light'}
-      className={`min-h-screen transition-colors duration-200 ${
-        isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-900'
+      className={`min-h-screen min-w-0 max-w-full overflow-x-hidden transition-colors duration-200 ${
+        isDark
+          ? 'bg-slate-950 text-slate-100'
+          : 'bg-slate-100 text-slate-900'
       }`}
     >
       {/* Dashboard header */}
@@ -382,8 +388,8 @@ function Dashboard() {
             : 'border-slate-200 bg-white'
         }`}
       >
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
+        <div className="flex min-w-0 flex-col gap-4 pl-14 sm:pl-0 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
             <h1 className={`text-2xl font-bold ${heading}`}>
               Dashboard
             </h1>
@@ -392,7 +398,7 @@ function Dashboard() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
             <form
               onSubmit={handleSearch}
               className="relative min-w-0 flex-1 sm:w-72 sm:flex-none"
@@ -401,13 +407,14 @@ function Dashboard() {
                 size={18}
                 className={`absolute left-3 top-1/2 -translate-y-1/2 ${muted}`}
               />
+
               <input
                 type="text"
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
                 placeholder="Search stock, e.g. TCS"
                 aria-label="Search stock symbol"
-                className={`w-full rounded-lg border py-2.5 pl-10 pr-4 text-sm outline-none transition focus:ring-2 ${input}`}
+                className={`w-full rounded-lg border py-2.5 pl-10 pr-4 text-base outline-none transition focus:ring-2 sm:text-sm ${input}`}
               />
             </form>
 
@@ -420,7 +427,7 @@ function Dashboard() {
               disabled={loading || snapshotsLoading}
               aria-label="Refresh dashboard"
               title="Refresh dashboard"
-              className={`flex shrink-0 items-center justify-center rounded-lg border px-3 py-2.5 disabled:opacity-50 ${button}`}
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border disabled:opacity-50 ${button}`}
             >
               <RefreshCw
                 size={17}
@@ -430,14 +437,12 @@ function Dashboard() {
               />
             </button>
 
-            
-
             <Navbar />
           </div>
         </div>
       </header>
 
-      <div className="space-y-6 p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto w-full min-w-0 max-w-[1600px] space-y-6 p-4 sm:p-6 lg:p-8">
         {error && (
           <div
             role="alert"
@@ -448,8 +453,10 @@ function Dashboard() {
             }`}
           >
             <AlertCircle size={18} className="mt-0.5 shrink-0" />
-            <div>
+
+            <div className="min-w-0">
               <p>{error}</p>
+
               <button
                 type="button"
                 onClick={loadDashboard}
@@ -462,30 +469,40 @@ function Dashboard() {
         )}
 
         {/* Summary cards */}
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div className={`rounded-xl border p-5 shadow-sm ${card}`}>
+        <section className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className={`min-w-0 rounded-xl border p-5 shadow-sm ${card}`}>
             <div className="flex items-center justify-between">
               <p className={`text-sm ${muted}`}>Portfolio Value</p>
+
               <div className={`rounded-lg p-2 ${panel}`}>
                 <Activity size={18} className={muted} />
               </div>
             </div>
+
             <p className={`mt-4 break-words text-2xl font-bold ${heading}`}>
               {loading ? 'Loading…' : formatCurrency(portfolioValue)}
             </p>
+
             <p className={`mt-2 text-xs ${muted}`}>
               Current value of your holdings
             </p>
           </div>
 
-          <div className={`rounded-xl border p-5 shadow-sm ${card}`}>
+          <div className={`min-w-0 rounded-xl border p-5 shadow-sm ${card}`}>
             <div className="flex items-center justify-between">
               <p className={`text-sm ${muted}`}>Total P&amp;L</p>
-              <div className={`rounded-lg p-2 ${
-                profitIsPositive
-                  ? isDark ? 'bg-emerald-950' : 'bg-emerald-50'
-                  : isDark ? 'bg-red-950' : 'bg-red-50'
-              }`}>
+
+              <div
+                className={`rounded-lg p-2 ${
+                  profitIsPositive
+                    ? isDark
+                      ? 'bg-emerald-950'
+                      : 'bg-emerald-50'
+                    : isDark
+                      ? 'bg-red-950'
+                      : 'bg-red-50'
+                }`}
+              >
                 {profitIsPositive ? (
                   <TrendingUp size={18} className="text-emerald-500" />
                 ) : (
@@ -493,11 +510,15 @@ function Dashboard() {
                 )}
               </div>
             </div>
-            <p className={`mt-4 break-words text-2xl font-bold ${
-              profitIsPositive ? 'text-emerald-500' : 'text-red-500'
-            }`}>
+
+            <p
+              className={`mt-4 break-words text-2xl font-bold ${
+                profitIsPositive ? 'text-emerald-500' : 'text-red-500'
+              }`}
+            >
               {loading ? 'Loading…' : formatCurrency(totalProfitLoss)}
             </p>
+
             <p className={`mt-2 text-xs ${muted}`}>
               {loading
                 ? 'Loading return…'
@@ -505,35 +526,37 @@ function Dashboard() {
             </p>
           </div>
 
-          <div className={`rounded-xl border p-5 shadow-sm ${card}`}>
+          <div className={`min-w-0 rounded-xl border p-5 shadow-sm ${card}`}>
             <div className="flex items-center justify-between">
               <p className={`text-sm ${muted}`}>Watchlist</p>
-              <div className={`rounded-lg p-2 ${
-                isDark ? 'bg-amber-950' : 'bg-amber-50'
-              }`}>
+
+              <div className={`rounded-lg p-2 ${isDark ? 'bg-amber-950' : 'bg-amber-50'}`}>
                 <Star size={18} className="text-amber-500" />
               </div>
             </div>
+
             <p className={`mt-4 text-2xl font-bold ${heading}`}>
               {loading ? '…' : watchlist.length}
             </p>
+
             <p className={`mt-2 text-xs ${muted}`}>
               Stocks you’re tracking
             </p>
           </div>
 
-          <div className={`rounded-xl border p-5 shadow-sm ${card}`}>
+          <div className={`min-w-0 rounded-xl border p-5 shadow-sm ${card}`}>
             <div className="flex items-center justify-between">
               <p className={`text-sm ${muted}`}>Portfolio Holdings</p>
-              <div className={`rounded-lg p-2 ${
-                isDark ? 'bg-blue-950' : 'bg-blue-50'
-              }`}>
+
+              <div className={`rounded-lg p-2 ${isDark ? 'bg-blue-950' : 'bg-blue-50'}`}>
                 <Activity size={18} className="text-blue-500" />
               </div>
             </div>
+
             <p className={`mt-4 text-2xl font-bold ${heading}`}>
               {loading ? '…' : holdingCount}
             </p>
+
             <p className={`mt-2 text-xs ${muted}`}>
               Stocks in your portfolio
             </p>
@@ -541,57 +564,66 @@ function Dashboard() {
         </section>
 
         {/* Main grid */}
-        <section className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <div className={`rounded-xl border p-5 shadow-sm xl:col-span-2 ${card}`}>
+        <section className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-3">
+          {/* Portfolio overview */}
+          <div className={`min-w-0 rounded-xl border p-4 shadow-sm sm:p-5 xl:col-span-2 ${card}`}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
+              <div className="min-w-0">
                 <h2 className={`text-lg font-semibold ${heading}`}>
                   Portfolio Overview
                 </h2>
+
                 <p className={`mt-1 text-xs ${muted}`}>
                   Your current holdings and overall return
                 </p>
               </div>
 
-              <span className={`w-fit rounded-full px-3 py-1 text-xs font-medium ${
-                profitIsPositive
-                  ? isDark
-                    ? 'bg-emerald-950 text-emerald-300'
-                    : 'bg-emerald-50 text-emerald-700'
-                  : isDark
-                    ? 'bg-red-950 text-red-300'
-                    : 'bg-red-50 text-red-700'
-              }`}>
+              <span
+                className={`w-fit rounded-full px-3 py-1 text-xs font-medium ${
+                  profitIsPositive
+                    ? isDark
+                      ? 'bg-emerald-950 text-emerald-300'
+                      : 'bg-emerald-50 text-emerald-700'
+                    : isDark
+                      ? 'bg-red-950 text-red-300'
+                      : 'bg-red-50 text-red-700'
+                }`}
+              >
                 {loading ? 'Loading…' : formatPercent(totalReturn)}
               </span>
             </div>
 
-            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className={`rounded-lg p-4 ${panel}`}>
+            <div className="mt-6 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className={`min-w-0 rounded-lg p-4 ${panel}`}>
                 <p className={`text-sm ${muted}`}>Invested Value</p>
-                <p className={`mt-2 text-xl font-semibold ${heading}`}>
+
+                <p className={`mt-2 break-words text-xl font-semibold ${heading}`}>
                   {loading
                     ? 'Loading…'
                     : formatCurrency(portfolio?.investedValue)}
                 </p>
               </div>
 
-              <div className={`rounded-lg p-4 ${panel}`}>
+              <div className={`min-w-0 rounded-lg p-4 ${panel}`}>
                 <p className={`text-sm ${muted}`}>Current Value</p>
-                <p className={`mt-2 text-xl font-semibold ${heading}`}>
+
+                <p className={`mt-2 break-words text-xl font-semibold ${heading}`}>
                   {loading ? 'Loading…' : formatCurrency(portfolioValue)}
                 </p>
               </div>
 
               {/* Historical portfolio chart */}
-              <div className={`rounded-lg p-4 sm:col-span-2 ${panel}`}>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className={`text-sm font-semibold ${
-                      isDark ? 'text-slate-200' : 'text-slate-800'
-                    }`}>
+              <div className={`min-w-0 rounded-lg p-3 sm:col-span-2 sm:p-4 ${panel}`}>
+                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p
+                      className={`text-sm font-semibold ${
+                        isDark ? 'text-slate-200' : 'text-slate-800'
+                      }`}
+                    >
                       Historical portfolio performance
                     </p>
+
                     <p className={`mt-1 text-xs leading-5 ${muted}`}>
                       Compare your recorded portfolio value with the amount invested.
                     </p>
@@ -601,7 +633,7 @@ function Dashboard() {
                     type="button"
                     onClick={saveTodaySnapshot}
                     disabled={savingSnapshot || snapshotsLoading}
-                    className={`shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                    className={`w-full shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto ${
                       isDark
                         ? 'bg-slate-700 text-white hover:bg-slate-600'
                         : 'bg-slate-900 text-white hover:bg-slate-700'
@@ -611,11 +643,14 @@ function Dashboard() {
                   </button>
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <label className={`text-xs font-medium ${
-                    isDark ? 'text-slate-300' : 'text-slate-600'
-                  }`}>
+                <div className="mt-4 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label
+                    className={`min-w-0 text-xs font-medium ${
+                      isDark ? 'text-slate-300' : 'text-slate-600'
+                    }`}
+                  >
                     From
+
                     <input
                       type="date"
                       value={startDate}
@@ -624,14 +659,17 @@ function Dashboard() {
                         setSnapshotMessage('')
                         setStartDate(event.target.value)
                       }}
-                      className={`mt-1 block w-full rounded-lg border px-3 py-2 text-sm outline-none ${input}`}
+                      className={`mt-1 block min-w-0 w-full rounded-lg border px-3 py-2 text-base outline-none sm:text-sm ${input}`}
                     />
                   </label>
 
-                  <label className={`text-xs font-medium ${
-                    isDark ? 'text-slate-300' : 'text-slate-600'
-                  }`}>
+                  <label
+                    className={`min-w-0 text-xs font-medium ${
+                      isDark ? 'text-slate-300' : 'text-slate-600'
+                    }`}
+                  >
                     To
+
                     <input
                       type="date"
                       value={endDate}
@@ -641,39 +679,44 @@ function Dashboard() {
                         setSnapshotMessage('')
                         setEndDate(event.target.value)
                       }}
-                      className={`mt-1 block w-full rounded-lg border px-3 py-2 text-sm outline-none ${input}`}
+                      className={`mt-1 block min-w-0 w-full rounded-lg border px-3 py-2 text-base outline-none sm:text-sm ${input}`}
                     />
                   </label>
                 </div>
 
                 {snapshotError && (
-                  <p role="alert" className="mt-3 text-sm text-red-500">
+                  <p role="alert" className="mt-3 break-words text-sm text-red-500">
                     {snapshotError}
                   </p>
                 )}
 
                 {snapshotMessage && (
-                  <p role="status" className="mt-3 text-sm text-emerald-500">
+                  <p role="status" className="mt-3 break-words text-sm text-emerald-500">
                     {snapshotMessage}
                   </p>
                 )}
 
-                <div className="mt-5 h-72 w-full">
+                <div className="mt-5 h-64 w-full min-w-0 sm:h-72">
                   {snapshotsLoading ? (
                     <div className={`flex h-full items-center justify-center text-sm ${muted}`}>
                       Loading portfolio history…
                     </div>
                   ) : snapshots.length === 0 ? (
-                    <div className={`flex h-full flex-col items-center justify-center rounded-lg border border-dashed px-4 text-center ${
-                      isDark
-                        ? 'border-slate-700 bg-slate-900'
-                        : 'border-slate-300 bg-white'
-                    }`}>
-                      <p className={`text-sm font-medium ${
-                        isDark ? 'text-slate-200' : 'text-slate-700'
-                      }`}>
+                    <div
+                      className={`flex h-full flex-col items-center justify-center rounded-lg border border-dashed px-4 text-center ${
+                        isDark
+                          ? 'border-slate-700 bg-slate-900'
+                          : 'border-slate-300 bg-white'
+                      }`}
+                    >
+                      <p
+                        className={`text-sm font-medium ${
+                          isDark ? 'text-slate-200' : 'text-slate-700'
+                        }`}
+                      >
                         No snapshots for this date range
                       </p>
+
                       <p className={`mt-1 max-w-md text-xs leading-5 ${muted}`}>
                         Record today's portfolio value or select a date range
                         containing saved snapshots. Previous dates will not
@@ -684,18 +727,21 @@ function Dashboard() {
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart
                         data={snapshots}
-                        margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
+                        margin={{ top: 8, right: 4, left: -18, bottom: 4 }}
                       >
                         <CartesianGrid
                           strokeDasharray="3 3"
                           stroke={chartGrid}
                         />
+
                         <XAxis
                           dataKey="dateLabel"
                           tick={{ fontSize: 11, fill: chartAxis }}
                           tickLine={false}
                           axisLine={{ stroke: chartGrid }}
+                          minTickGap={16}
                         />
+
                         <YAxis
                           tickFormatter={(value) =>
                             `₹${Number(value).toLocaleString('en-IN', {
@@ -708,6 +754,7 @@ function Dashboard() {
                           axisLine={false}
                           width={72}
                         />
+
                         <Tooltip
                           labelFormatter={(label, payload) =>
                             payload?.[0]?.payload?.snapshotDate || label
@@ -726,6 +773,7 @@ function Dashboard() {
                             color: isDark ? '#f8fafc' : '#0f172a',
                           }}
                         />
+
                         <Line
                           type="monotone"
                           dataKey="portfolioValue"
@@ -735,6 +783,7 @@ function Dashboard() {
                           dot={{ r: 3 }}
                           activeDot={{ r: 5 }}
                         />
+
                         <Line
                           type="monotone"
                           dataKey="investedValue"
@@ -754,12 +803,16 @@ function Dashboard() {
                     <span className="h-2.5 w-2.5 rounded-full bg-teal-700" />
                     Portfolio value
                   </span>
+
                   <span className="flex items-center gap-2">
-                    <span className={`h-0.5 w-4 ${
-                      isDark ? 'bg-slate-400' : 'bg-slate-500'
-                    }`} />
+                    <span
+                      className={`h-0.5 w-4 ${
+                        isDark ? 'bg-slate-400' : 'bg-slate-500'
+                      }`}
+                    />
                     Invested value
                   </span>
+
                   <span className="ml-auto">
                     {snapshots.length} snapshot(s)
                   </span>
@@ -768,7 +821,7 @@ function Dashboard() {
                 <button
                   type="button"
                   onClick={() => navigate('/portfolio')}
-                  className={`mt-4 rounded-lg border px-4 py-2 text-sm font-medium ${button}`}
+                  className={`mt-4 w-full rounded-lg border px-4 py-2 text-sm font-medium sm:w-auto ${button}`}
                 >
                   View portfolio
                 </button>
@@ -777,16 +830,18 @@ function Dashboard() {
           </div>
 
           {/* Watchlist preview */}
-          <div className={`rounded-xl border p-5 shadow-sm ${card}`}>
+          <div className={`min-w-0 rounded-xl border p-5 shadow-sm ${card}`}>
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className={`text-lg font-semibold ${heading}`}>
                   Watchlist
                 </h2>
+
                 <p className={`mt-1 text-xs ${muted}`}>
                   Tracked stocks
                 </p>
               </div>
+
               <Star size={18} className={muted} />
             </div>
 
@@ -800,6 +855,7 @@ function Dashboard() {
                   <p className={`text-sm ${muted}`}>
                     Your watchlist is empty.
                   </p>
+
                   <button
                     type="button"
                     onClick={() => navigate('/watchlist')}
@@ -822,25 +878,29 @@ function Dashboard() {
                           `/analysis?symbol=${encodeURIComponent(stock.symbol)}`,
                         )
                       }
-                      className={`flex w-full items-center justify-between gap-3 border-b pb-3 text-left last:border-0 last:pb-0 hover:opacity-75 ${separator}`}
+                      className={`flex w-full min-w-0 items-center justify-between gap-3 border-b pb-3 text-left last:border-0 last:pb-0 hover:opacity-75 ${separator}`}
                     >
                       <div className="min-w-0">
                         <p className={`truncate text-sm font-semibold ${heading}`}>
                           {stock.symbol}
                         </p>
+
                         <p className={`mt-1 text-xs ${muted}`}>
                           {formatCurrency(stock.currentPrice)}
                         </p>
                       </div>
 
-                      <div className={`flex shrink-0 items-center gap-1 text-sm font-medium ${
-                        positive ? 'text-emerald-500' : 'text-red-500'
-                      }`}>
+                      <div
+                        className={`flex shrink-0 items-center gap-1 text-sm font-medium ${
+                          positive ? 'text-emerald-500' : 'text-red-500'
+                        }`}
+                      >
                         {positive ? (
                           <ArrowUpRight size={15} />
                         ) : (
                           <ArrowDownRight size={15} />
                         )}
+
                         {formatPercent(stock.changePercent)}
                       </div>
                     </button>
@@ -860,12 +920,13 @@ function Dashboard() {
         </section>
 
         {/* Recent strategy signals */}
-        <section className={`rounded-xl border p-5 shadow-sm ${card}`}>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
+        <section className={`min-w-0 rounded-xl border p-4 shadow-sm sm:p-5 ${card}`}>
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
               <h2 className={`text-lg font-semibold ${heading}`}>
                 Recent Signals
               </h2>
+
               <p className={`mt-1 text-xs ${muted}`}>
                 Strategy results for stocks in your watchlist
               </p>
@@ -874,7 +935,7 @@ function Dashboard() {
             <button
               type="button"
               onClick={() => navigate('/strategies')}
-              className={`w-fit text-sm font-medium ${
+              className={`w-fit shrink-0 text-sm font-medium ${
                 isDark
                   ? 'text-slate-300 hover:text-white'
                   : 'text-slate-700 hover:text-slate-900'
@@ -884,12 +945,14 @@ function Dashboard() {
             </button>
           </div>
 
-          <div className="mt-5 overflow-x-auto">
-            <table className="w-full min-w-[600px] text-left">
+          <div className="-mx-2 mt-5 overflow-x-auto sm:mx-0">
+            <table className="w-full min-w-[560px] text-left">
               <thead>
-                <tr className={`border-b text-xs uppercase tracking-wide ${muted} ${
-                  isDark ? 'border-slate-800' : 'border-slate-200'
-                }`}>
+                <tr
+                  className={`border-b text-xs uppercase tracking-wide ${muted} ${
+                    isDark ? 'border-slate-800' : 'border-slate-200'
+                  }`}
+                >
                   <th className="px-3 py-3 font-medium">Stock</th>
                   <th className="px-3 py-3 font-medium">Strategy</th>
                   <th className="px-3 py-3 font-medium">Indicator</th>
@@ -920,19 +983,26 @@ function Dashboard() {
                       <td className={`px-3 py-4 text-sm font-semibold ${heading}`}>
                         {signal.symbol}
                       </td>
-                      <td className={`px-3 py-4 text-sm ${
-                        isDark ? 'text-slate-300' : 'text-slate-600'
-                      }`}>
+
+                      <td
+                        className={`px-3 py-4 text-sm ${
+                          isDark ? 'text-slate-300' : 'text-slate-600'
+                        }`}
+                      >
                         {signal.strategy}
                       </td>
-                      <td className={`px-3 py-4 text-sm ${
-                        isDark ? 'text-slate-300' : 'text-slate-600'
-                      }`}>
+
+                      <td
+                        className={`px-3 py-4 text-sm ${
+                          isDark ? 'text-slate-300' : 'text-slate-600'
+                        }`}
+                      >
                         {signal.value}
                       </td>
+
                       <td className="px-3 py-4">
                         <span
-                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${
                             signal.signal === 'BUY'
                               ? isDark
                                 ? 'bg-emerald-950 text-emerald-300'

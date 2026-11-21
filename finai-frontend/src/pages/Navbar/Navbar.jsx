@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -32,15 +31,18 @@ function Navbar() {
     }
   })
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside or pressing Escape
   useEffect(() => {
-    const handleClickOutside = event => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
+    const handleClickOutside = (event) => {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(event.target)
+      ) {
         setOpen(false)
       }
     }
 
-    const handleEscape = event => {
+    const handleEscape = (event) => {
       if (event.key === 'Escape') {
         setOpen(false)
         setShowLogoutPopup(false)
@@ -64,6 +66,7 @@ function Navbar() {
         setImageError(false)
       } catch {
         setUser({})
+        setImageError(false)
       }
     }
 
@@ -93,7 +96,7 @@ function Navbar() {
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
-    .map(part => part[0].toUpperCase())
+    .map((part) => part[0].toUpperCase())
     .join('')
 
   const handleLogout = () => {
@@ -102,19 +105,19 @@ function Navbar() {
   }
 
   const confirmLogout = () => {
-  // Clear login session
-  localStorage.removeItem('token')
-  localStorage.removeItem('user')
+    // Clear login session
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
 
-  // Close popup and dropdown
-  setShowLogoutPopup(false)
-  setOpen(false)
+    // Close popup and dropdown
+    setShowLogoutPopup(false)
+    setOpen(false)
 
-  // Redirect to the public landing page
-  window.location.replace(
-    'https://finai-financial-analysis-platform.vercel.app'
-  )
-}
+    // Redirect to the public landing page
+    window.location.replace(
+      'https://finai-financial-analysis-platform.vercel.app'
+    )
+  }
 
   const panel = isDark
     ? 'border-slate-700 bg-slate-900 text-slate-100'
@@ -128,11 +131,17 @@ function Navbar() {
     ? 'hover:bg-slate-800'
     : 'hover:bg-slate-50'
 
+  const actionClass = `flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition ${
+    isDark
+      ? 'text-slate-200 hover:bg-slate-800'
+      : 'text-slate-700 hover:bg-slate-50'
+  }`
+
   return (
     <>
       <div
         ref={menuRef}
-        className="relative flex items-center justify-end gap-1"
+        className="relative flex min-w-0 items-center justify-end gap-1 sm:gap-2"
       >
         {/* Global theme toggle */}
         <button
@@ -144,7 +153,7 @@ function Navbar() {
           title={
             isDark ? 'Switch to light mode' : 'Switch to dark mode'
           }
-          className={`mr-2 rounded-xl border p-2.5 transition ${
+          className={`mr-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition sm:mr-2 sm:h-11 sm:w-11 ${
             isDark
               ? 'border-slate-700 bg-slate-800 text-amber-300 hover:bg-slate-700'
               : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
@@ -156,10 +165,11 @@ function Navbar() {
         {/* Profile button */}
         <button
           type="button"
-          onClick={() => setOpen(previous => !previous)}
+          onClick={() => setOpen((previous) => !previous)}
           aria-expanded={open}
+          aria-haspopup="true"
           aria-label="Open user profile menu"
-          className={`flex items-center gap-3 rounded-xl px-2 py-1.5 transition ${hoverBg}`}
+          className={`flex min-w-0 items-center gap-2 rounded-xl px-1.5 py-1.5 transition sm:gap-3 sm:px-2 ${hoverBg}`}
         >
           {photo && !imageError ? (
             <img
@@ -167,19 +177,19 @@ function Navbar() {
               alt={`${name}'s profile`}
               referrerPolicy="no-referrer"
               onError={() => setImageError(true)}
-              className={`h-10 w-10 rounded-full border object-cover ${
+              className={`h-9 w-9 shrink-0 rounded-full border object-cover sm:h-10 sm:w-10 ${
                 isDark
                   ? 'border-slate-700'
                   : 'border-slate-200'
               }`}
             />
           ) : (
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-700 text-sm font-semibold text-white">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-700 text-sm font-semibold text-white sm:h-10 sm:w-10">
               {initials || <UserRound size={19} />}
             </div>
           )}
 
-          <div className="hidden text-left sm:block">
+          <div className="hidden min-w-0 text-left sm:block">
             <p
               className={`max-w-36 truncate text-sm font-semibold ${
                 isDark ? 'text-slate-100' : 'text-slate-800'
@@ -195,7 +205,7 @@ function Navbar() {
 
           <ChevronDown
             size={16}
-            className={`transition ${mutedText} ${
+            className={`shrink-0 transition ${mutedText} ${
               open ? 'rotate-180' : ''
             }`}
           />
@@ -204,7 +214,8 @@ function Navbar() {
         {/* Profile dropdown */}
         {open && (
           <div
-            className={`absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-xl border shadow-lg ${panel}`}
+            role="menu"
+            className={`absolute right-0 top-full z-[60] mt-2 w-[min(16rem,calc(100vw-2rem))] overflow-hidden rounded-xl border shadow-xl ${panel}`}
           >
             <div
               className={`border-b px-4 py-4 ${
@@ -225,15 +236,12 @@ function Navbar() {
             <div className="p-2">
               <button
                 type="button"
+                role="menuitem"
                 onClick={() => {
                   setOpen(false)
                   navigate('/settings')
                 }}
-                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition ${
-                  isDark
-                    ? 'text-slate-200 hover:bg-slate-800'
-                    : 'text-slate-700 hover:bg-slate-50'
-                }`}
+                className={actionClass}
               >
                 <Settings size={17} />
                 Settings
@@ -241,8 +249,9 @@ function Navbar() {
 
               <button
                 type="button"
+                role="menuitem"
                 onClick={handleLogout}
-                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition ${
+                className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition ${
                   isDark
                     ? 'text-red-400 hover:bg-red-950/40'
                     : 'text-red-600 hover:bg-red-50'
@@ -260,7 +269,7 @@ function Navbar() {
       {showLogoutPopup && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
-          onMouseDown={event => {
+          onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
               setShowLogoutPopup(false)
             }
@@ -271,11 +280,11 @@ function Navbar() {
             aria-modal="true"
             aria-labelledby="logout-title"
             aria-describedby="logout-description"
-            className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl sm:p-7 ${panel}`}
+            className={`w-full max-w-md rounded-2xl border p-5 shadow-2xl sm:p-7 ${panel}`}
           >
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between gap-4">
               <div
-                className={`flex h-12 w-12 items-center justify-center rounded-xl ${
+                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
                   isDark ? 'bg-red-950/50' : 'bg-red-50'
                 }`}
               >
@@ -286,7 +295,7 @@ function Navbar() {
                 type="button"
                 onClick={() => setShowLogoutPopup(false)}
                 aria-label="Close logout confirmation"
-                className={`rounded-lg p-2 transition ${
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition ${
                   isDark
                     ? 'text-slate-400 hover:bg-slate-800 hover:text-white'
                     : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
@@ -296,7 +305,10 @@ function Navbar() {
               </button>
             </div>
 
-            <h2 id="logout-title" className="mt-5 text-xl font-bold">
+            <h2
+              id="logout-title"
+              className="mt-5 text-lg font-bold sm:text-xl"
+            >
               Logout from FinAI?
             </h2>
 
@@ -311,7 +323,7 @@ function Navbar() {
               <button
                 type="button"
                 onClick={() => setShowLogoutPopup(false)}
-                className={`rounded-xl border px-5 py-2.5 text-sm font-semibold transition ${
+                className={`min-h-11 rounded-xl border px-5 py-2.5 text-sm font-semibold transition ${
                   isDark
                     ? 'border-slate-700 text-slate-200 hover:bg-slate-800'
                     : 'border-slate-300 text-slate-700 hover:bg-slate-50'
@@ -323,7 +335,7 @@ function Navbar() {
               <button
                 type="button"
                 onClick={confirmLogout}
-                className="flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
+                className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
               >
                 <LogOut size={16} />
                 Yes, Logout

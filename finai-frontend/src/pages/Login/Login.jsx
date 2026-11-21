@@ -57,9 +57,9 @@ function Login() {
 
       setError(
         err.response?.data?.message ||
-        (typeof err.response?.data === "string"
-          ? err.response.data
-          : "Invalid email or password. Please try again.")
+          (typeof err.response?.data === "string"
+            ? err.response.data
+            : "Invalid email or password. Please try again.")
       );
     } finally {
       setLoading(false);
@@ -67,14 +67,14 @@ function Login() {
   };
 
   const inputClass =
-    "w-full rounded-xl border border-slate-700 bg-slate-900/70 py-3 pl-11 pr-12 text-white placeholder-slate-500 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20";
+    "w-full min-w-0 rounded-xl border border-slate-700 bg-slate-900/70 py-3.5 pl-11 pr-12 text-base text-white placeholder-slate-500 outline-none transition focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20";
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#080d19] p-5 text-white">
-      <div className="grid w-full max-w-5xl overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 shadow-2xl md:grid-cols-2">
+    <div className="flex min-h-screen w-full items-center justify-center overflow-x-hidden bg-[#080d19] px-4 py-6 text-white sm:px-6 sm:py-10">
+      <div className="grid w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl sm:rounded-3xl md:grid-cols-2">
 
         {/* Left branding panel */}
-        <div className="hidden flex-col justify-between bg-gradient-to-br from-cyan-500/20 via-slate-900 to-blue-600/20 p-10 md:flex">
+        <div className="hidden flex-col justify-between bg-gradient-to-br from-cyan-500/20 via-slate-900 to-blue-600/20 p-8 md:flex lg:p-10">
           <Link to="/login" className="flex items-center gap-3">
             <div className="rounded-xl bg-cyan-400 p-2.5 text-slate-950">
               <TrendingUp size={25} />
@@ -85,16 +85,16 @@ function Login() {
             </span>
           </Link>
 
-          <div>
-            <p className="mb-4 text-sm font-semibold uppercase tracking-[0.25em] text-cyan-300">
+          <div className="my-10">
+            <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300 lg:text-sm lg:tracking-[0.25em]">
               Smarter financial decisions
             </p>
 
-            <h1 className="text-4xl font-bold leading-tight">
+            <h1 className="text-3xl font-bold leading-tight lg:text-4xl">
               Welcome back to your financial journey.
             </h1>
 
-            <p className="mt-5 leading-7 text-slate-400">
+            <p className="mt-5 text-sm leading-7 text-slate-400 lg:text-base">
               Track your portfolio, analyze market trends, explore
               trading strategies, and make data-informed decisions
               in one place.
@@ -107,7 +107,9 @@ function Login() {
         </div>
 
         {/* Login form */}
-        <div className="p-6 sm:p-10 md:p-12">
+        <div className="min-w-0 p-5 sm:p-8 md:p-8 lg:p-12">
+
+          {/* Mobile branding */}
           <Link
             to="/login"
             className="mb-8 inline-flex items-center gap-3 md:hidden"
@@ -121,11 +123,11 @@ function Login() {
             </span>
           </Link>
 
-          <p className="text-sm font-semibold text-cyan-400">
+          <p className="text-xs font-semibold tracking-wider text-cyan-400 sm:text-sm">
             WELCOME BACK
           </p>
 
-          <h2 className="mt-2 text-3xl font-bold">
+          <h2 className="mt-2 break-words text-2xl font-bold sm:text-3xl">
             Sign in to Fin<span className="text-blue-500">AI</span>
           </h2>
 
@@ -133,16 +135,18 @@ function Login() {
             Continue to your financial intelligence dashboard.
           </p>
 
+          {/* Success message */}
           {successMessage && (
             <div
               role="status"
-              className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300"
+              className="mt-6 break-words rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300"
             >
               {successMessage}
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="mt-8 space-y-5">
+          <form onSubmit={handleLogin} className="mt-7 space-y-5 sm:mt-8">
+
             {/* Email */}
             <div>
               <label
@@ -155,16 +159,21 @@ function Login() {
               <div className="relative">
                 <Mail
                   size={18}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500"
+                  className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500"
                 />
 
                 <input
                   id="email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setError("");
+                  }}
                   placeholder="you@example.com"
                   autoComplete="email"
+                  autoCapitalize="none"
+                  spellCheck={false}
                   required
                   className={inputClass}
                 />
@@ -183,14 +192,17 @@ function Login() {
               <div className="relative">
                 <Lock
                   size={18}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500"
+                  className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500"
                 />
 
                 <input
                   id="password"
                   type={showPassword ? "text" : "password"}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setError("");
+                  }}
                   placeholder="Enter your password"
                   autoComplete="current-password"
                   required
@@ -205,7 +217,8 @@ function Login() {
                   aria-label={
                     showPassword ? "Hide password" : "Show password"
                   }
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                  aria-pressed={showPassword}
+                  className="absolute right-2.5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
                 >
                   {showPassword ? (
                     <EyeOff size={18} />
@@ -220,7 +233,7 @@ function Login() {
             {error && (
               <div
                 role="alert"
-                className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300"
+                className="break-words rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm leading-6 text-red-300"
               >
                 {error}
               </div>
@@ -230,17 +243,17 @@ function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-xl bg-cyan-400 py-3.5 font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex min-h-12 w-full items-center justify-center rounded-xl bg-cyan-400 px-4 py-3.5 font-semibold text-slate-950 transition hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>
 
-          <p className="mt-7 text-center text-sm text-slate-400">
+          <p className="mt-7 text-center text-sm leading-6 text-slate-400">
             Don&apos;t have an account?{" "}
             <Link
               to="/signup"
-              className="font-semibold text-cyan-400 hover:text-cyan-300"
+              className="font-semibold text-cyan-400 transition hover:text-cyan-300"
             >
               Sign up
             </Link>

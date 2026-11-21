@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Search,
@@ -21,6 +21,7 @@ import {
 } from 'recharts'
 import api from '../../services/api'
 import Navbar from '../../pages/Navbar/Navbar'
+
 function StockAnalysis() {
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -30,6 +31,7 @@ function StockAnalysis() {
 
   const [symbol, setSymbol] = useState(querySymbol)
   const [searchInput, setSearchInput] = useState(querySymbol)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const [prices, setPrices] = useState([])
   const [rsi, setRsi] = useState(null)
@@ -48,7 +50,6 @@ function StockAnalysis() {
   const [pageError, setPageError] = useState('')
   const [searchError, setSearchError] = useState('')
 
-  // Keep the input and API symbol synchronized with the URL.
   useEffect(() => {
     setSymbol(querySymbol)
     setSearchInput(querySymbol)
@@ -167,20 +168,33 @@ function StockAnalysis() {
     }
   }, [])
 
-  // Load all data whenever the selected stock changes.
   useEffect(() => {
     if (!symbol) return
 
+    let active = true
     setPageError('')
 
-    fetchPrices(symbol)
-    fetchRsi(symbol)
-    fetchEma(symbol)
-    fetchMacd(symbol)
-    fetchBollinger(symbol)
-    fetchAiAnalysis(symbol)
+    const loadData = async () => {
+      await Promise.all([
+        fetchPrices(symbol),
+        fetchRsi(symbol),
+        fetchEma(symbol),
+        fetchMacd(symbol),
+        fetchBollinger(symbol),
+        fetchAiAnalysis(symbol),
+      ])
+
+      if (!active) return
+    }
+
+    loadData()
+
+    return () => {
+      active = false
+    }
   }, [
     symbol,
+    refreshKey,
     fetchPrices,
     fetchRsi,
     fetchEma,
@@ -203,13 +217,10 @@ function StockAnalysis() {
     setPageError('')
 
     if (nextSymbol === symbol) {
-      // Reload the current stock when Analyze is clicked again.
-      setSymbol('')
-      setTimeout(() => setSymbol(nextSymbol), 0)
-      return
+      setRefreshKey((previous) => previous + 1)
+    } else {
+      setSearchParams({ symbol: nextSymbol })
     }
-
-    setSearchParams({ symbol: nextSymbol })
   }
 
   const handleRefreshAi = () => {
@@ -219,7 +230,11 @@ function StockAnalysis() {
   const formatPrice = (value) => {
     const number = Number(value)
 
-    if (value === null || value === undefined || !Number.isFinite(number)) {
+    if (
+      value === null ||
+      value === undefined ||
+      !Number.isFinite(number)
+    ) {
       return 'N/A'
     }
 
@@ -231,7 +246,10 @@ function StockAnalysis() {
 
   const formatNumber = (value) => {
     const number = Number(value)
-    return value !== null && value !== undefined && Number.isFinite(number)
+
+    return value !== null &&
+      value !== undefined &&
+      Number.isFinite(number)
       ? number.toFixed(2)
       : 'N/A'
   }
@@ -257,7 +275,6 @@ function StockAnalysis() {
 
   const macdValue = Number(macd?.macd)
   const signalValue = Number(macd?.signal)
-  const histogramValue = Number(macd?.histogram)
 
   const validMacd =
     macd?.macd !== null &&
@@ -275,123 +292,143 @@ function StockAnalysis() {
         : 'Neutral'
     : 'Unavailable'
 
-  const bollingerChartData =
-    bollinger && prices.length > 0
-      ? [
-          {
-            date: prices[prices.length - 1].date,
-            price: currentPrice,
-            upper: Number(bollinger.upperBand),
-            middle: Number(bollinger.middleBand),
-            lower: Number(bollinger.lowerBand),
-          },
-        ].filter(
-          (item) =>
-            Number.isFinite(item.price) &&
-            Number.isFinite(item.upper) &&
-            Number.isFinite(item.middle) &&
-            Number.isFinite(item.lower)
-        )
-      : []
+  const bollingerChartData = useMemo(() => {
+    if (!bollinger || currentPrice === null || prices.length === 0) {
+      return []
+    }
+
+    const row = {
+      date: prices[prices.length - 1].date,
+      price: currentPrice,
+      upper: Number(bollinger.upperBand),
+      middle: Number(bollinger.middleBand),
+      lower: Number(bollinger.lowerBand),
+    }
+
+    return [
+      row,
+    ].filter((item) =>
+      Object.values(item)
+        .filter((value) => typeof value === 'number')
+        .every(Number.isFinite)
+    )
+  }, [bollinger, currentPrice, prices])
+
+  const cardClass =
+    'min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5'
+
+  const headingClass =
+    'text-slate-900 dark:text-white'
+
+  const mutedClass =
+    'text-slate-500 dark:text-slate-400'
+
+  const valueClass =
+    'mt-4 break-words text-2xl font-bold text-slate-900 dark:text-white'
+
+  const detailClass =
+    'rounded-lg bg-slate-50 p-4 dark:bg-slate-800/70'
+
+  const badgeNeutral =
+    'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
 
   return (
-    <div className="min-h-full bg-slate-100">
-      {/* Header with stock search, theme toggle and profile */}
-<header className="border-b border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900 sm:px-6 lg:px-8">
-  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-    {/* Page title */}
-    <div className="min-w-0">
-      <h1 className="text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl">
-        Stock Analysis
-      </h1>
-      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-        Technical indicators and AI-powered market insights
-      </p>
-    </div>
-
-    {/* Search and right-side controls */}
-    <div className="flex min-w-0 flex-wrap items-center gap-3">
-      <form
-        onSubmit={handleSearch}
-        className="flex min-w-0 flex-1 gap-2 sm:flex-initial"
-      >
-        <div className="min-w-0 flex-1 sm:w-64 sm:flex-none">
-          <div className="relative">
-            <Search
-              size={18}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-            <input
-              type="text"
-              value={searchInput}
-              onChange={(event) => {
-                setSearchInput(event.target.value.toUpperCase())
-                setSearchError('')
-              }}
-              placeholder="Stock symbol, e.g. TCS"
-              aria-label="Stock symbol"
-              className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-10 pr-4 text-base text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder-slate-400 dark:focus:border-blue-400 dark:focus:ring-blue-900"
-            />
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-950">
+      <header className="border-b border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0 pl-12 sm:pl-0">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl">
+              Stock Analysis
+            </h1>
+            <p className={`mt-1 text-sm ${mutedClass}`}>
+              Technical indicators and AI-powered market insights
+            </p>
           </div>
 
-          {searchError && (
-            <p className="mt-1 text-xs text-red-600">
-              {searchError}
-            </p>
-          )}
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start">
+            <form
+              onSubmit={handleSearch}
+              className="flex min-w-0 flex-1 gap-2 sm:flex-initial"
+            >
+              <div className="min-w-0 flex-1 sm:w-64 sm:flex-none">
+                <div className="relative">
+                  <Search
+                    size={18}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                  <input
+                    type="text"
+                    value={searchInput}
+                    onChange={(event) => {
+                      setSearchInput(event.target.value.toUpperCase())
+                      setSearchError('')
+                    }}
+                    placeholder="Stock symbol, e.g. TCS"
+                    aria-label="Stock symbol"
+                    className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-base text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder-slate-400 dark:focus:border-blue-400 dark:focus:ring-blue-900"
+                  />
+                </div>
+
+                {searchError && (
+                  <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                    {searchError}
+                  </p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                className="flex shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-slate-700 dark:bg-blue-600 dark:hover:bg-blue-500 sm:px-4"
+              >
+                <Search size={17} />
+                <span>Analyze</span>
+              </button>
+            </form>
+
+            <div className="shrink-0 self-start">
+              <Navbar />
+            </div>
+          </div>
         </div>
+      </header>
 
-        <button
-          type="submit"
-          className="flex shrink-0 items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-700 dark:bg-blue-600 dark:hover:bg-blue-500"
-        >
-          <Search size={17} />
-          <span>Analyze</span>
-        </button>
-      </form>
-
-      {/* Dark/light toggle and profile menu */}
-      <div className="shrink-0">
-        <Navbar />
-      </div>
-    </div>
-  </div>
-</header>
-
-      <div className="space-y-6 p-4 sm:p-6 lg:p-8">
+      <main className="space-y-5 p-4 sm:space-y-6 sm:p-6 lg:p-8">
         {pageError && (
-          <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
             <AlertCircle size={18} className="mt-0.5 shrink-0" />
             <p>{pageError}</p>
           </div>
         )}
 
         {/* Stock overview */}
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <section className={cardClass}>
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
+            <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-3">
-                <h2 className="text-2xl font-bold text-slate-900">
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
                   {symbol}
                 </h2>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                <span className={`rounded-full px-3 py-1 text-xs font-medium ${badgeNeutral}`}>
                   Stored market data
                 </span>
               </div>
-              <p className="mt-1 text-sm text-slate-500">
+
+              <p className={`mt-1 text-sm ${mutedClass}`}>
                 Latest available historical record
               </p>
             </div>
 
             <div className="sm:text-right">
-              <p className="text-3xl font-bold text-slate-900">
+              <p className="text-3xl font-bold text-slate-900 dark:text-white">
                 {loadingPrices ? 'Loading...' : formatPrice(currentPrice)}
               </p>
 
               {priceChange !== null && priceChangePercent !== null ? (
                 <p
                   className={`mt-1 flex items-center gap-1 text-sm font-medium sm:justify-end ${
-                    priceChange >= 0 ? 'text-emerald-600' : 'text-red-600'
+                    priceChange >= 0
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-red-600 dark:text-red-400'
                   }`}
                 >
                   {priceChange >= 0 ? (
@@ -399,13 +436,14 @@ function StockAnalysis() {
                   ) : (
                     <TrendingDown size={16} />
                   )}
+
                   {priceChange >= 0 ? '+' : ''}
                   {formatPrice(priceChange)} (
                   {priceChangePercent >= 0 ? '+' : ''}
                   {priceChangePercent.toFixed(2)}%)
                 </p>
               ) : (
-                <p className="mt-1 text-xs text-slate-500">
+                <p className={`mt-1 text-xs ${mutedClass}`}>
                   {prices.length < 2
                     ? 'Not enough price history to calculate change'
                     : ''}
@@ -416,40 +454,56 @@ function StockAnalysis() {
         </section>
 
         {/* Historical closing price chart */}
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <section className={cardClass}>
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">
+            <h2 className={`text-lg font-semibold ${headingClass}`}>
               Price Movement
             </h2>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className={`mt-1 text-xs ${mutedClass}`}>
               Closing prices saved in your database
             </p>
           </div>
 
-          <div className="mt-6 h-72 w-full sm:h-80">
+          <div className="chart-container mt-5 h-64 min-w-0 w-full sm:mt-6 sm:h-80">
             {loadingPrices ? (
-              <div className="flex h-full items-center justify-center text-sm text-slate-500">
+              <div className={`flex h-full items-center justify-center text-sm ${mutedClass}`}>
                 Loading price history...
               </div>
             ) : prices.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-center text-sm text-slate-500">
+              <div className={`flex h-full items-center justify-center text-center text-sm ${mutedClass}`}>
                 No historical prices found for {symbol}.
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={prices}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <LineChart
+                  data={prices}
+                  margin={{ top: 8, right: 8, left: -18, bottom: 4 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="#94a3b8"
+                    opacity={0.25}
+                  />
                   <XAxis
                     dataKey="date"
-                    tick={{ fontSize: 11 }}
-                    minTickGap={25}
+                    tick={{ fontSize: 10, fill: '#94a3b8' }}
+                    minTickGap={30}
+                    tickLine={false}
+                    axisLine={false}
                   />
                   <YAxis
                     domain={['auto', 'auto']}
-                    tick={{ fontSize: 11 }}
-                    width={65}
+                    tick={{ fontSize: 10, fill: '#94a3b8' }}
+                    width={62}
+                    tickLine={false}
+                    axisLine={false}
                   />
                   <Tooltip
+                    contentStyle={{
+                      borderRadius: 10,
+                      border: '1px solid #cbd5e1',
+                      fontSize: 12,
+                    }}
                     formatter={(value) => [formatPrice(value), 'Close']}
                     labelFormatter={(label) => `Date: ${label}`}
                   />
@@ -470,24 +524,27 @@ function StockAnalysis() {
 
         {/* Indicator cards */}
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {/* RSI */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className={cardClass}>
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-slate-500">RSI (14)</p>
-              <Activity size={18} className="text-slate-400" />
+              <p className={`text-sm font-medium ${mutedClass}`}>RSI (14)</p>
+              <Activity size={18} className={mutedClass} />
             </div>
 
-            <p className="mt-4 text-2xl font-bold text-slate-900">
-              {loadingRsi ? 'Loading...' : validRsi ? numericRsi.toFixed(2) : 'N/A'}
+            <p className={valueClass}>
+              {loadingRsi
+                ? 'Loading...'
+                : validRsi
+                  ? numericRsi.toFixed(2)
+                  : 'N/A'}
             </p>
 
             <span
               className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-semibold ${
                 validRsi && numericRsi < 30
-                  ? 'bg-amber-50 text-amber-700'
+                  ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
                   : validRsi && numericRsi > 70
-                    ? 'bg-red-50 text-red-700'
-                    : 'bg-slate-100 text-slate-600'
+                    ? 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300'
+                    : badgeNeutral
               }`}
             >
               {loadingRsi
@@ -502,26 +559,24 @@ function StockAnalysis() {
             </span>
           </div>
 
-          {/* EMA */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className={cardClass}>
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-slate-500">EMA (20)</p>
-              <TrendingUp size={18} className="text-slate-400" />
+              <p className={`text-sm font-medium ${mutedClass}`}>EMA (20)</p>
+              <TrendingUp size={18} className={mutedClass} />
             </div>
 
-            <p className="mt-4 text-2xl font-bold text-slate-900">
+            <p className={valueClass}>
               {loadingEma ? 'Loading...' : formatPrice(ema20)}
             </p>
 
-            <span className="mt-2 inline-block rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+            <span className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-semibold ${badgeNeutral}`}>
               20-period average
             </span>
           </div>
 
-          {/* MACD */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className={cardClass}>
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-slate-500">MACD</p>
+              <p className={`text-sm font-medium ${mutedClass}`}>MACD</p>
               {macdStatus === 'Bearish' ? (
                 <TrendingDown size={18} className="text-red-500" />
               ) : (
@@ -529,51 +584,54 @@ function StockAnalysis() {
               )}
             </div>
 
-            <p className="mt-4 text-2xl font-bold text-slate-900">
-              {loadingMacd ? 'Loading...' : validMacd ? macdValue.toFixed(2) : 'N/A'}
+            <p className={valueClass}>
+              {loadingMacd
+                ? 'Loading...'
+                : validMacd
+                  ? macdValue.toFixed(2)
+                  : 'N/A'}
             </p>
 
             <span
               className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-semibold ${
                 macdStatus === 'Bearish'
-                  ? 'bg-red-50 text-red-600'
+                  ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-300'
                   : macdStatus === 'Bullish'
-                    ? 'bg-emerald-50 text-emerald-600'
-                    : 'bg-slate-100 text-slate-600'
+                    ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300'
+                    : badgeNeutral
               }`}
             >
               {loadingMacd ? 'Loading...' : macdStatus}
             </span>
           </div>
 
-          {/* Bollinger */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className={cardClass}>
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-slate-500">
+              <p className={`text-sm font-medium ${mutedClass}`}>
                 Bollinger Bands
               </p>
-              <Activity size={18} className="text-slate-400" />
+              <Activity size={18} className={mutedClass} />
             </div>
 
-            <p className="mt-4 text-2xl font-bold text-slate-900">
+            <p className={valueClass}>
               {loadingBollinger
                 ? 'Loading...'
                 : formatPrice(bollinger?.middleBand)}
             </p>
 
-            <span className="mt-2 inline-block rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+            <span className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-semibold ${badgeNeutral}`}>
               Middle Band
             </span>
           </div>
         </section>
 
         {/* MACD details */}
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <section className={cardClass}>
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">
+            <h2 className={`text-lg font-semibold ${headingClass}`}>
               MACD Details
             </h2>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className={`mt-1 text-xs ${mutedClass}`}>
               Moving Average Convergence Divergence
             </p>
           </div>
@@ -584,11 +642,11 @@ function StockAnalysis() {
               { label: 'Signal Line', value: macd?.signal },
               { label: 'Histogram', value: macd?.histogram },
             ].map((item) => (
-              <div key={item.label} className="rounded-lg bg-slate-50 p-4">
-                <p className="text-xs font-medium text-slate-500">
+              <div key={item.label} className={detailClass}>
+                <p className={`text-xs font-medium ${mutedClass}`}>
                   {item.label}
                 </p>
-                <p className="mt-2 text-xl font-bold text-slate-900">
+                <p className="mt-2 break-words text-xl font-bold text-slate-900 dark:text-white">
                   {loadingMacd ? 'Loading...' : formatNumber(item.value)}
                 </p>
               </div>
@@ -597,12 +655,12 @@ function StockAnalysis() {
         </section>
 
         {/* Bollinger details */}
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <section className={cardClass}>
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">
+            <h2 className={`text-lg font-semibold ${headingClass}`}>
               Bollinger Bands
             </h2>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className={`mt-1 text-xs ${mutedClass}`}>
               Upper, middle and lower bands for {symbol}
             </p>
           </div>
@@ -613,33 +671,58 @@ function StockAnalysis() {
               { label: 'Middle Band', value: bollinger?.middleBand },
               { label: 'Lower Band', value: bollinger?.lowerBand },
             ].map((item) => (
-              <div key={item.label} className="rounded-lg bg-slate-50 p-4">
-                <p className="text-xs font-medium text-slate-500">
+              <div key={item.label} className={detailClass}>
+                <p className={`text-xs font-medium ${mutedClass}`}>
                   {item.label}
                 </p>
-                <p className="mt-2 text-xl font-bold text-slate-900">
-                  {loadingBollinger ? 'Loading...' : formatPrice(item.value)}
+                <p className="mt-2 break-words text-xl font-bold text-slate-900 dark:text-white">
+                  {loadingBollinger
+                    ? 'Loading...'
+                    : formatPrice(item.value)}
                 </p>
               </div>
             ))}
           </div>
 
-          <div className="mt-6 h-72 w-full sm:h-80">
+          <div className="chart-container mt-6 h-64 min-w-0 w-full sm:h-80">
             {loadingBollinger ? (
-              <div className="flex h-full items-center justify-center text-sm text-slate-500">
+              <div className={`flex h-full items-center justify-center text-sm ${mutedClass}`}>
                 Loading Bollinger Bands...
               </div>
             ) : bollingerChartData.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-center text-sm text-slate-500">
+              <div className={`flex h-full items-center justify-center text-center text-sm ${mutedClass}`}>
                 Price history and Bollinger values are required to plot this chart.
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={bollingerChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                  <YAxis domain={['auto', 'auto']} tick={{ fontSize: 11 }} />
+                <LineChart
+                  data={bollingerChartData}
+                  margin={{ top: 8, right: 8, left: -18, bottom: 4 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="#94a3b8"
+                    opacity={0.25}
+                  />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 10, fill: '#94a3b8' }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    domain={['auto', 'auto']}
+                    tick={{ fontSize: 10, fill: '#94a3b8' }}
+                    width={62}
+                    tickLine={false}
+                    axisLine={false}
+                  />
                   <Tooltip
+                    contentStyle={{
+                      borderRadius: 10,
+                      border: '1px solid #cbd5e1',
+                      fontSize: 12,
+                    }}
                     formatter={(value) => [formatPrice(value)]}
                     labelFormatter={(label) => `Date: ${label}`}
                   />
@@ -682,25 +765,25 @@ function StockAnalysis() {
             )}
           </div>
 
-          <p className="mt-3 text-xs leading-5 text-slate-500">
+          <p className={`mt-3 text-xs leading-5 ${mutedClass}`}>
             The chart displays the latest available price alongside the
             current bands. It is a snapshot, not a historical band series.
           </p>
         </section>
 
         {/* AI Analysis */}
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <section className={cardClass}>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-900 dark:bg-blue-600">
                 <Brain size={20} className="text-white" />
               </div>
 
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">
+              <div className="min-w-0">
+                <h2 className={`text-lg font-semibold ${headingClass}`}>
                   AI Analysis
                 </h2>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className={`mt-1 text-xs ${mutedClass}`}>
                   LLM-generated explanation for {symbol}
                 </p>
               </div>
@@ -710,7 +793,7 @@ function StockAnalysis() {
               type="button"
               onClick={handleRefreshAi}
               disabled={loadingAi}
-              className="flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto"
             >
               <RefreshCw
                 size={16}
@@ -720,29 +803,29 @@ function StockAnalysis() {
             </button>
           </div>
 
-          <div className="mt-5 rounded-lg bg-slate-50 p-4 sm:p-5">
+          <div className="mt-5 rounded-lg bg-slate-50 p-4 dark:bg-slate-800/70 sm:p-5">
             {loadingAi ? (
-              <div className="flex items-center gap-3 text-sm text-slate-500">
+              <div className={`flex items-center gap-3 text-sm ${mutedClass}`}>
                 <RefreshCw size={18} className="animate-spin" />
                 Generating AI analysis...
               </div>
             ) : aiAnalysis?.aiExplanation ? (
-              <div className="whitespace-pre-line break-words text-sm leading-7 text-slate-700">
+              <div className="whitespace-pre-line break-words text-sm leading-7 text-slate-700 dark:text-slate-200">
                 {aiAnalysis.aiExplanation}
               </div>
             ) : (
-              <p className="text-sm text-slate-500">
+              <p className={`text-sm ${mutedClass}`}>
                 AI analysis is currently unavailable. Try refreshing the analysis.
               </p>
             )}
 
-            <p className="mt-4 text-xs leading-5 text-slate-500">
+            <p className={`mt-4 border-t border-slate-200 pt-3 text-xs leading-5 dark:border-slate-700 ${mutedClass}`}>
               This explanation is based on calculated technical indicators
               and is for informational purposes only. It is not financial advice.
             </p>
           </div>
         </section>
-      </div>
+      </main>
     </div>
   )
 }

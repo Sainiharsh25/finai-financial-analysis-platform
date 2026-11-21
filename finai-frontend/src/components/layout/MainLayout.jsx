@@ -1,15 +1,142 @@
-import Sidebar from './Sidebar'
 
-function MainLayout({ children }) {
+import { useState } from 'react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import {
+  LayoutDashboard,
+  BarChart3,
+  TrendingUp,
+  History,
+  Briefcase,
+  Star,
+  Settings,
+  LogOut,
+  GraduationCap,
+  X,
+} from 'lucide-react'
+
+import ConfirmModal from '../common/ConfirmModal'
+
+const menuItems = [
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+  { label: 'Finance Learning', icon: GraduationCap, path: '/learning' },
+  { label: 'Stock Analysis', icon: BarChart3, path: '/analysis' },
+  { label: 'Strategies', icon: TrendingUp, path: '/strategies' },
+  { label: 'Backtesting', icon: History, path: '/backtesting' },
+  { label: 'Portfolio', icon: Briefcase, path: '/portfolio' },
+  { label: 'Watchlist', icon: Star, path: '/watchlist' },
+  { label: 'Settings', icon: Settings, path: '/settings' },
+]
+
+function Sidebar({ isOpen = false, onClose = () => {} }) {
+  const navigate = useNavigate()
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
+
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    setShowLogoutModal(false)
+    navigate('/', { replace: true })
+  }
+
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-100">
-      <Sidebar />
+    <>
+      {/* Mobile backdrop */}
+      {isOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation menu"
+          onClick={onClose}
+          className="fixed inset-0 z-40 bg-black/60 md:hidden"
+        />
+      )}
 
-      <main className="min-w-0 flex-1 overflow-y-auto">
-        {children}
-      </main>
-    </div>
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex h-dvh w-[min(18rem,85vw)] shrink-0 flex-col border-r border-slate-800 bg-slate-950 text-white transition-transform duration-200 md:sticky md:top-0 md:z-auto md:h-screen md:w-64 md:translate-x-0 ${
+          isOpen
+            ? 'translate-x-0'
+            : '-translate-x-full md:translate-x-0'
+        }`}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-800 px-5 py-5 sm:px-6">
+          <div>
+            <h1 className="text-2xl font-bold">
+              Fin<span className="text-blue-500">AI</span>
+            </h1>
+            <p className="mt-1 text-xs text-slate-400">
+              Financial Intelligence
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close navigation menu"
+            className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white md:hidden"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto px-3 py-5">
+          <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Menu
+          </p>
+
+          <div className="space-y-1">
+            {menuItems.map((item) => {
+              const Icon = item.icon
+
+              return (
+                <NavLink
+                  key={item.label}
+                  to={item.path}
+                  onClick={onClose}
+                  className={({ isActive }) =>
+                    `flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm transition ${
+                      isActive
+                        ? 'bg-slate-800 text-white'
+                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                    }`
+                  }
+                >
+                  <Icon size={19} />
+                  <span>{item.label}</span>
+                </NavLink>
+              )
+            })}
+          </div>
+        </nav>
+
+        <div className="shrink-0 border-t border-slate-800">
+          <div className="px-3 py-3">
+            <button
+              type="button"
+              onClick={() => setShowLogoutModal(true)}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm text-slate-300 transition hover:bg-red-900/30 hover:text-red-400"
+            >
+              <LogOut size={19} />
+              <span>Logout</span>
+            </button>
+          </div>
+
+          <div className="border-t border-slate-800 p-4">
+            <div className="rounded-lg bg-slate-900 p-3">
+              <p className="text-sm font-medium">AI Assistant</p>
+              <p className="mt-1 text-xs text-slate-400">
+                Analyze your market data with AI
+              </p>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <ConfirmModal
+        isOpen={showLogoutModal}
+        onCancel={() => setShowLogoutModal(false)}
+        onConfirm={handleLogout}
+      />
+    </>
   )
 }
 
-export default MainLayout
+export default Sidebar
